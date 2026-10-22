@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1d2024">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Tram – drive a tram through the city and stop on the mark. A browser game.">
+  <title>Tram</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <canvas id="hud"></canvas>
+
+  <div id="controls" class="hidden">
+    <div id="pad">
+      <button id="bell-btn" class="ctl">BELL</button>
+      <button id="doors-btn" class="ctl ctl-doors"><span class="closed-label">◄ DOORS ►</span><span class="open-label">► CLOSE ◄</span></button>
+    </div>
+    <div id="lever" aria-label="Master controller">
+      <div class="slot"></div>
+      <div class="handle"><span>N</span></div>
+    </div>
+    <button id="pause-btn" aria-label="Pause">II</button>
+  </div>
+
+  <section id="menu" class="screen">
+    <div class="card">
+      <h1>TRAM</h1>
+      <p class="sub">Test Line · prototype</p>
+      <button id="start-btn" class="btn">DEPART</button>
+      <div class="help">
+        <p>Stop the tram front on the <b>H</b> marker, open the doors, let people board, close the doors, go.</p>
+        <p class="touch-only"><b>Right thumb</b> – controller: up = power, down = brake, all the way down = emergency brake.<br><b>Left thumb</b> – doors and bell.</p>
+        <p class="desk">W / S or ↑ / ↓ – controller · Space – emergency brake · E – doors · B – bell · P – pause</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="pause" class="screen hidden">
+    <div class="card">
+      <h2>PAUSED</h2>
+      <button id="resume-btn" class="btn">RESUME</button>
+      <button id="restart-btn" class="btn btn-alt">RESTART</button>
+    </div>
+  </section>
+
+  <section id="results" class="screen hidden">
+    <div class="card">
+      <h2>END OF THE LINE</h2>
+      <table class="res">
+        <thead><tr><th>Stop</th><th>Rating</th><th>Error</th><th>Pts</th></tr></thead>
+        <tbody id="res-rows"></tbody>
+      </table>
+      <p class="score">Score <b id="res-score">0</b></p>
+      <p id="res-meta" class="meta"></p>
+      <button id="again-btn" class="btn">DRIVE AGAIN</button>
+    </div>
+  </section>
+
+  <div id="loading">Loading…</div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

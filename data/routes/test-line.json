@@ -1,0 +1,22 @@
+{
+  "name": "Test Line",
+  "seed": 11,
+  "pieces": [
+    { "type": "straight", "length": 220 },
+    { "type": "curve", "radius": 150, "angle": 20, "dir": "right" },
+    { "type": "straight", "length": 260 },
+    { "type": "curve", "radius": 120, "angle": 30, "dir": "left" },
+    { "type": "straight", "length": 330 },
+    { "type": "curve", "radius": 200, "angle": 15, "dir": "right" },
+    { "type": "straight", "length": 400 },
+    { "type": "curve", "radius": 100, "angle": 25, "dir": "left" },
+    { "type": "straight", "length": 380 }
+  ],
+  "stops": [
+    { "name": "Tram Depot", "s": 40 },
+    { "name": "Mill Street", "s": 360 },
+    { "name": "Market Square", "s": 760 },
+    { "name": "Clock Tower", "s": 1180 },
+    { "name": "Cathedral Square", "s": 1700 }
+  ]
+}
