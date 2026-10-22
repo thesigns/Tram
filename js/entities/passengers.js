@@ -16,7 +16,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 // Boarding hides them one by one (simple placeholder for the boarding animation).
 export class Passengers {
   constructor(scene, track, stops, seed) {
-    const total = stops.reduce((n, st) => n + st.waiting, 0);
+    const total = stops.reduce((n, st) => n + (st.baseWaiting ?? st.waiting), 0);
     const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     this.bodies = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 1.2, 0.3), mat, Math.max(1, total));
     this.heads = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.27, 0.25), mat, Math.max(1, total));
@@ -28,7 +28,7 @@ export class Passengers {
     const top = STOPS.platformHeight;
     let i = 0;
     stops.forEach((st, si) => {
-      for (let k = 0; k < st.waiting; k++, i++) {
+      for (let k = 0; k < (st.baseWaiting ?? st.waiting); k++, i++) {
         const s = st.start + 4 + rnd() * (STOPS.platformLength - 10);
         const off = STOPS.platformEdge + 0.7 + rnd() * 1.6;
         const p = track.at(s, off, _t);
@@ -44,15 +44,17 @@ export class Passengers {
         this.index[si].push(i);
       }
     });
-    this.reset();
+    this.reset(stops);
     scene.add(this.bodies, this.heads);
   }
 
-  reset() {
-    this.matrices.forEach(([body, head], i) => {
-      this.bodies.setMatrixAt(i, body);
-      this.heads.setMatrixAt(i, head);
-    });
+  // Show the people actually waiting in this run (stops[i].waiting of the ones built).
+  reset(stops) {
+    this.index.forEach((list, si) => list.forEach((i, k) => {
+      const show = k < (stops?.[si].waiting ?? list.length);
+      this.bodies.setMatrixAt(i, show ? this.matrices[i][0] : HIDDEN);
+      this.heads.setMatrixAt(i, show ? this.matrices[i][1] : HIDDEN);
+    }));
     this.flush();
   }
 

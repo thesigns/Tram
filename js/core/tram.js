@@ -34,7 +34,7 @@ export class Tram {
     this.doors = 0;       // 0 = closed … 1 = fully open
     this.doorsTarget = 0;
     this.da = 0;          // change of acceleration in the last step (comfort)
-    this.derailed = false;
+    this.halted = false;  // the run has ended (derailment, collision): grind to a halt
   }
 
   get stopped() { return this.v === 0; }
@@ -55,8 +55,8 @@ export class Tram {
     // traction and brake effort build up gradually – jumping notches is felt as jerk, not hidden
     let tracTarget = n > 0 && this.doorsClosed ? n / 4 : 0;
     let brakeTarget = n === EB ? BRAKE.emergency : n < 0 ? BRAKE.service[-n - 1] : 0;
-    if (this.derailed) { tracTarget = 0; brakeTarget = P.derailDecel; }
-    const tau = n === EB || this.derailed ? P.ebTau : P.effortTau;
+    if (this.halted) { tracTarget = 0; brakeTarget = P.haltDecel; }
+    const tau = n === EB || this.halted ? P.ebTau : P.effortTau;
     const k = 1 - Math.exp(-dt / tau);
     this.traction += (tracTarget - this.traction) * k;
     this.brake += (brakeTarget - this.brake) * k;

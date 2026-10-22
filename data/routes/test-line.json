@@ -6,6 +6,18 @@
   "limits": [
     { "from": 990, "to": 1090, "kmh": 30 }
   ],
+  "intersections": [
+    { "s": 150, "signal": true },
+    { "s": 460, "signal": true },
+    { "s": 1320, "signal": true },
+    { "s": 1600 }
+  ],
+  "hazards": [
+    { "type": "leftTurn", "s": 460, "chance": 0.8 },
+    { "type": "jaywalker", "s": 840, "chance": 0.8 },
+    { "type": "parked", "s": 1250, "chance": 0.8 },
+    { "type": "cyclist", "s": 1470, "turnAt": 1600, "chance": 0.8 }
+  ],
   "pieces": [
     { "type": "straight", "length": 220 },
     { "type": "curve", "radius": 150, "angle": 20, "dir": "right" },
@@ -21,7 +33,7 @@
     { "name": "Tram Depot", "s": 40 },
     { "name": "Mill Street", "s": 360 },
     { "name": "Market Square", "s": 760 },
-    { "name": "Clock Tower", "s": 1180 },
+    { "name": "Clock Tower", "s": 1180, "request": true },
     { "name": "Cathedral Square", "s": 1700 }
   ]
 }

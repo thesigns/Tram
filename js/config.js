@@ -11,7 +11,7 @@ export const PHYSICS = {
   effortTau: 0.35,      // build-up time constant of traction and the service brake [s]
   ebTau: 0.15,          // build-up time constant of the emergency brake [s]
   doorTime: 1.6,        // doors fully open / fully closed [s]
-  derailDecel: 5,       // a derailed tram grinds to a halt [m/s²]
+  haltDecel: 5,         // a derailed or crashed tram grinds to a halt [m/s²]
 };
 
 export const LIMITS = {
@@ -44,6 +44,7 @@ export const TIMETABLE = {
   refBrake: 1,          // reference profile braking [m/s²]
   refMargin: 2,         // the reference profile stays this far under the limit [km/h]
   reaction: 2,          // reference dwell: the driver's reactions on top of doors and boarding [s]
+  signalAllowance: 2,   // per tram signal on the way [real s]
   round: 15,            // departures are rounded up to this [game s]
   earlyTolerance: 5,    // on time = from 0:05 early …
   lateTolerance: 30,    // … to 0:30 late [game s]
@@ -95,6 +96,36 @@ export const STOPS = {
   penaltyDoorsAway: 200,
   penaltyLeftBehind: 150,
   precisionRange: 20,     // the HUD switches to the precision bar this close to the marker
+  // request stops (GDD §6.1): sometimes nobody gets on or off – the tram may pass through
+  requestEmpty: 0.5,      // chance that nobody needs the stop
+  requestAlight: 0.5,     // otherwise: chance that it's somebody inside pressing the button
+  requestSkipPoints: 400, // passing an empty request stop
+  requestMissPenalty: 300, // passing a request stop somebody needed
+};
+
+// The street: signals, traffic and hazards (GDD §7).
+export const STREET = {
+  envelope: 1.25,         // half-width of the tram's swept path [m]
+  crossHalf: 6,           // cross street half-width [m]
+  stopLineBack: 10,       // the tram stop line is this far before the intersection centre [m]
+  signal: { cycle: 36, go: 18, prepare: 5 },   // tram signal timing [real s]; prepare = "about to change"
+  penaltyRed: 500,        // passing the stop line on a stop aspect
+  penaltyCollision: 500,  // minor collision with a car
+  fatalSpeed: 15,         // collisions with cars above this end the run [km/h]
+  collisionComfort: 25,
+  // a hazard commits only while the tram can still stop at commitBrake after commitReaction (+ margin) …
+  commitBrake: 1.2,
+  commitReaction: 1.5,
+  commitMargin: 8,
+  // … and never once the tram couldn't stop at B4 after a short reaction – every hazard is avoidable
+  fairBrake: 1.6,
+  fairReaction: 0.6,
+  fairMargin: 3,
+  bellRange: 90,          // hazards hear the bell this far ahead [m]
+  bellSpam: 2.5,          // rings closer together than this upset the passengers [s]
+  bellSpamComfort: 3,
+  warnRange: 150,         // the HUD warns about hazards on the track this far ahead [m]
+  signalAhead: 220,       // the HUD shows the next signal this far ahead [m]
 };
 
 export const CITY = {

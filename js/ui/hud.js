@@ -8,8 +8,10 @@ const DIM = 'rgba(248,244,232,0.7)';
 const RED = '#ff5a46';
 const AMBER = '#f2c230';
 const GREEN = '#9fe05e';
+const BLUE = '#62c4ff';
+const HAZARD_TEXT = { car: 'CAR ON THE TRACK', van: 'OBSTRUCTION', ped: 'PEDESTRIAN', bike: 'CYCLIST AHEAD' };
 export const RATING_COLORS = {
-  PERFECT: '#5ee08a', GREAT: GREEN, GOOD: AMBER, OK: '#f0a050', MISSED: RED,
+  PERFECT: '#5ee08a', GREAT: GREEN, GOOD: AMBER, OK: '#f0a050', MISSED: RED, PASSED: GREEN, EMPTY: '#b8c0c8',
 };
 
 // Precision bar range: 20 m before the marker … 6 m past it, with a square-root scale so the last meters are wide.
@@ -67,7 +69,8 @@ export class Hud {
     if (target) {
       const atStop = run.phase === 'board' || run.phase === 'ready';
       const time = run.terminus ? `ARR ${formatClock(tt.arr[run.idx])}` : `DEP ${formatClock(tt.dep[run.idx])}`;
-      this.text(`${atStop ? 'AT STOP' : run.terminus ? 'TERMINUS' : 'NEXT STOP'} · ${time}`, left, 22, 13, DIM, 'left', 600);
+      const kind = atStop ? 'AT STOP' : run.terminus ? 'TERMINUS' : target.request ? 'REQUEST STOP' : 'NEXT STOP';
+      this.text(`${kind} · ${time}`, left, 22, 13, DIM, 'left', 600);
       this.text(target.name, left, 48, 25);
     }
 
@@ -83,7 +86,13 @@ export class Hud {
     // distance to the marker, or the precision bar close to it
     const d = run.distance(tram.s);
     const bar = target && run.phase === 'drive' && d <= STOPS.precisionRange;
-    if (target && run.phase === 'drive' && !bar) this.text(`${Math.round(d)} m`, left, 76, 22);
+    if (target && run.phase === 'drive' && !bar) {
+      this.text(`${Math.round(d)} m`, left, 76, 22);
+      if (run.stopRequested) {
+        c.font = `700 22px ${FONT}`;
+        this.text('● STOP REQUESTED', left + c.measureText(`${Math.round(d)} m`).width + 12, 76, 15, BLUE);
+      }
+    }
     if (bar) this.precisionBar(c, d, 100, run.missDistance(target));
 
     // speed, the current limit and the next lower one
@@ -98,6 +107,8 @@ export class Hud {
       this.limitSign(c, w / 2 + 66, y - 12, 12, next.kmh);
       this.text(`in ${Math.round(next.dist)} m`, w / 2 + 84, y - 7, 14, DIM, 'left', 600);
     }
+    const sig = run.street.nextSignal(tram.s);
+    if (sig) this.signalIcon(c, w / 2 - 120, y - 10, sig, blink);
     const n = tram.notch;
     this.text(notchName(n), w / 2, y + 20, 15, n === EB ? RED : n > 0 ? '#9fe0a0' : n < 0 ? AMBER : DIM, 'center');
 
@@ -140,6 +151,11 @@ export class Hud {
       if (this.notice.time <= 0) this.notice = null;
     }
 
+    // hazards worth watching, and something on the tracks ahead
+    for (const m of st.markers ?? []) this.marker(c, m.x, m.y, m.dist);
+    const hz = run.street.warning;
+    if (hz && run.phase === 'drive') this.hazard(c, w / 2, y + 102, `${HAZARD_TEXT[hz.kind]} · ${Math.round(hz.dist)} m`);
+
     this.drawPopup(c, dt);
     if (st.debug) this.drawDebug(c, st);
     c.shadowBlur = 0;
@@ -163,6 +179,67 @@ export class Hud {
     c.textBaseline = 'middle';
     c.fillText(String(kmh), x, y + 1);
     c.restore();
+  }
+
+  // The next tram signal: a black head with the lit lamp (stop / prepare / go) and the distance.
+  signalIcon(c, x, y, sig, blink) {
+    c.save();
+    c.shadowBlur = 3;
+    c.fillStyle = '#121212';
+    c.beginPath();
+    if (c.roundRect) c.roundRect(x - 11, y - 25, 22, 50, 5);
+    else c.rect(x - 11, y - 25, 22, 50);   // older Safari
+    c.fill();
+    c.shadowBlur = 0;
+    const lamps = [['stop', y - 15], ['prepare', y], ['go', y + 15]];
+    for (const [sym, ly] of lamps) {
+      const lit = sym === sig.aspect && (sym !== 'prepare' || blink);
+      c.fillStyle = lit ? '#fffbe8' : '#3a3a3a';
+      if (sym === 'stop') c.fillRect(x - 7, ly - 2, 14, 4);
+      else if (sym === 'go') c.fillRect(x - 2, ly - 7, 4, 14);
+      else { c.beginPath(); c.arc(x, ly, 3.5, 0, Math.PI * 2); c.fill(); }
+    }
+    c.restore();
+    const color = sig.aspect === 'stop' ? RED : sig.aspect === 'prepare' ? AMBER : DIM;
+    this.text(`${Math.round(sig.dist)} m`, x, y + 41, 13, color, 'center', 600);
+  }
+
+  // A small "!" above a hazard in the street; it grows as the tram gets closer.
+  marker(c, x, y, dist) {
+    const r = clamp(11 - dist / 25, 5, 10);
+    c.save();
+    c.shadowBlur = 3;
+    c.fillStyle = AMBER;
+    c.beginPath();
+    c.moveTo(x, y - r * 1.8);
+    c.lineTo(x + r, y);
+    c.lineTo(x - r, y);
+    c.closePath();
+    c.fill();
+    c.shadowBlur = 0;
+    c.fillStyle = '#151515';
+    c.fillRect(x - 1, y - r * 1.25, 2, r * 0.75);
+    c.fillRect(x - 1, y - r * 0.35, 2, 2);
+    c.restore();
+  }
+
+  hazard(c, x, y, label) {
+    c.font = `700 17px ${FONT}`;
+    const tw = c.measureText(label).width;
+    const x0 = x - (tw + 26) / 2;
+    c.save();
+    c.fillStyle = AMBER;
+    c.beginPath();
+    c.moveTo(x0 + 9, y - 16);
+    c.lineTo(x0 + 19, y + 2);
+    c.lineTo(x0 - 1, y + 2);
+    c.closePath();
+    c.fill();
+    c.fillStyle = '#151515';
+    c.fillRect(x0 + 8, y - 10, 2, 7);
+    c.fillRect(x0 + 8, y - 2, 2, 2);
+    c.restore();
+    this.text(label, x0 + 26, y, 17, AMBER, 'left');
   }
 
   comfortBar(c, x, y, bw, comfort) {

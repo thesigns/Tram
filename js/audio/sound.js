@@ -172,6 +172,17 @@ export class Sound {
 
   penalty() { this.thump(0.3, 220, 110, 0.25); }
 
+  // somebody pressed the stop button
+  request() {
+    this.tone(1320, 0.18, 0.6, 0, [[1, 1], [2.01, 0.15]]);
+  }
+
+  // a minor collision
+  bump() {
+    this.thump(0.7, 140, 50, 0.25);
+    this.burst(0.5, 900, 0.35, 0.8);
+  }
+
   derail() {
     this.burst(0.9, 500, 1.8, 0.4, 'lowpass');
     this.burst(0.5, 2600, 1.2, 3);

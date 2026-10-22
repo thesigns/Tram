@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { CITY, STOPS } from '../config.js';
+import { CITY, STOPS, STREET } from '../config.js';
 import { MeshBuilder, flatMaterial } from '../models/builder.js';
 import { mulberry32, pick } from '../core/utils.js';
 
-// Placeholder city along the track (GDD §13): street, rails, sidewalks, catenary poles, facades and platforms.
+// Placeholder city along the track (GDD §13): street, rails, sidewalks, catenary poles, facades, platforms
+// and cross streets.
 // Everything static is merged into one mesh per chunk of track (one draw call each) and hidden beyond the fog.
 
 const COL = {
@@ -75,7 +76,7 @@ function vcyl(b, track, s, off, y, r0, r1, h, seg, color) {
   b.add(new THREE.CylinderGeometry(r0, r1, h, seg, 1), color, [p.x, p.y + y, p.z]);
 }
 
-function street(b, track, s0, s1) {
+function street(b, track, s0, s1, gaps) {
   const R = CITY.roadHalf, F = CITY.facade, g = CITY.gauge / 2;
   ribbon(b, track, s0, s1, -R, R, 0, COL.asphalt);
   ribbon(b, track, s0, s1, -1.25, 1.25, 0.004, COL.trackbed);
@@ -85,27 +86,60 @@ function street(b, track, s0, s1) {
     const e = Math.min(s + 4.5, s1);
     for (const o of [-4.1, 4.1]) ribbon(b, track, s, e, o - 0.07, o + 0.07, 0.006, COL.dash);
   }
-  ribbon(b, track, s0, s1, R, F, 0.15, COL.sidewalk);
-  ribbon(b, track, s0, s1, -F, -R, 0.15, COL.sidewalk);
-  wall(b, track, s0, s1, R, 0, 0.15, COL.curb, -1);
-  wall(b, track, s0, s1, -R, 0, 0.15, COL.curb, 1);
+  // sidewalks, interrupted by cross streets
+  for (const [a, e] of outside(s0, s1, gaps)) {
+    ribbon(b, track, a, e, R, F, 0.15, COL.sidewalk);
+    ribbon(b, track, a, e, -F, -R, 0.15, COL.sidewalk);
+    wall(b, track, a, e, R, 0, 0.15, COL.curb, -1);
+    wall(b, track, a, e, -R, 0, 0.15, COL.curb, 1);
+  }
   // contact wire above the track
   ribbon(b, track, s0, s1, -0.03, 0.03, 5.6, COL.wire, DOWN);
 }
 
-function poles(b, track, s0, s1) {
+// Parts of [s0, s1] outside the gaps (sorted [from, to] ranges).
+function outside(s0, s1, gaps) {
+  const out = [];
+  let a = s0;
+  for (const [g0, g1] of gaps) {
+    if (g1 <= a || g0 >= s1) continue;
+    if (g0 > a) out.push([a, g0]);
+    a = Math.max(a, g1);
+  }
+  if (a < s1) out.push([a, s1]);
+  return out;
+}
+
+const inGap = (s, gaps) => gaps.some(([g0, g1]) => s > g0 && s < g1);
+
+function poles(b, track, s0, s1, gaps) {
   const o = CITY.roadHalf + 0.5;
   for (let s = Math.ceil(s0 / CITY.poleSpacing) * CITY.poleSpacing; s < s1; s += CITY.poleSpacing) {
+    if (inGap(s, gaps)) continue;
     for (const side of [-1, 1]) vcyl(b, track, s, side * o, 3.6, 0.09, 0.12, 7.2, 6, COL.pole);
     tbox(b, track, s, 0, 6.4, 2 * o, 0.03, 0.03, COL.wire);
   }
 }
 
-function trees(b, track, rnd, s0, s1) {
+// A cross street: asphalt beyond the main road, a zebra crossing before it and, with a tram signal,
+// the tram stop line.
+function intersection(b, track, I) {
+  const R = CITY.roadHalf, W = 2 * STREET.crossHalf;
+  for (const side of [-1, 1]) tbox(b, track, I.s, side * (R + 22), 0.003, 44, 0.01, W, COL.asphalt);
+  const zs = I.s - STREET.crossHalf - 1.8;
+  for (let o = -R + 0.6; o < R - 0.3; o += 1.1) {
+    if (Math.abs(o) < 1.6) continue;
+    tbox(b, track, zs, o, 0.006, 0.55, 0.01, 3, COL.white);
+  }
+  if (I.signal) tbox(b, track, I.s - STREET.stopLineBack, 0, 0.008, 2.6, 0.01, 0.35, COL.white);
+}
+
+function trees(b, track, rnd, s0, s1, gaps) {
   for (const side of [-1, 1]) {
     if (rnd() < 0.5) continue;
     const o = side * (CITY.facade - 1.5);
     for (let s = Math.ceil(s0 / CITY.poleSpacing) * CITY.poleSpacing + 15; s < s1; s += CITY.poleSpacing) {
+      if (inGap(s, gaps)) continue;
       vcyl(b, track, s, o, 1.3, 0.12, 0.16, 2.6, 5, COL.trunk);
       const p = track.at(s, o, _t);
       const r = 1.6 + rnd() * 0.8;
@@ -115,17 +149,23 @@ function trees(b, track, rnd, s0, s1) {
   }
 }
 
-function buildings(b, track, rnd, s0, s1, side) {
+function buildings(b, track, rnd, s0, s1, side, gaps) {
   const F = CITY.facade;
   let s = s0 + rnd() * 3;
   while (s < s1) {
+    const w = 8 + rnd() * 10, depth = 10 + rnd() * 8;
+    // keep cross streets free, with a bit of room at the corners
+    const gap = gaps.find(([g0, g1]) => s < g1 + 1 && s + w > g0 - 1);
+    if (gap) {
+      s = gap[1] + 1;
+      continue;
+    }
     if (rnd() < 0.1) {
       // side street: a gap with a strip of asphalt leading away
       tbox(b, track, s + 7, side * (F + 20), 0.005, 40, 0.01, 12, COL.asphalt);
       s += 14;
       continue;
     }
-    const w = 8 + rnd() * 10, depth = 10 + rnd() * 8;
     if (s + w > track.length) break;
     const floors = 3 + Math.floor(rnd() * 4);
     const h = 4.2 + floors * 3.1 + 0.6;
@@ -176,19 +216,21 @@ function platform(b, track, st) {
   tbox(b, track, sm, E + W - 0.6, 0.7, 0.4, 0.08, 4, COL.shelter);
 }
 
-export function createCity(track, stops, seed) {
+export function createCity(track, stops, seed, intersections = []) {
   const group = new THREE.Group();
   const chunks = [];
   const L = CITY.chunk;
+  const gaps = intersections.map((I) => [I.s - STREET.crossHalf, I.s + STREET.crossHalf]).sort((a, b) => a[0] - b[0]);
   for (let c = 0; c * L < track.length; c++) {
     const s0 = c * L, s1 = Math.min(track.length, s0 + L);
     const rnd = mulberry32(seed * 1000 + c);
     const b = new MeshBuilder();
-    street(b, track, s0, s1);
-    poles(b, track, s0, s1);
-    trees(b, track, rnd, s0, s1);
-    for (const side of [-1, 1]) buildings(b, track, rnd, s0, s1, side);
+    street(b, track, s0, s1, gaps);
+    poles(b, track, s0, s1, gaps);
+    trees(b, track, rnd, s0, s1, gaps);
+    for (const side of [-1, 1]) buildings(b, track, rnd, s0, s1, side, gaps);
     for (const st of stops) if (st.s >= s0 && st.s < s1) platform(b, track, st);
+    for (const I of intersections) if (I.s >= s0 && I.s < s1) intersection(b, track, I);
     if (s1 >= track.length) {
       // buffer stop at the end of the line
       tbox(b, track, track.length - 1, 0, 0.6, 2.6, 1.2, 0.8, COL.buffer);

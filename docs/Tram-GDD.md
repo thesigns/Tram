@@ -120,7 +120,7 @@ A normal stop is a long, readable approach, which is what makes precision stoppi
 | doors off the platform | MISSED | 0, and the tram must reposition (time loss) |
 
 - A **combo** for consecutive PERFECT/GREAT stops multiplies the score.
-- **Request stops:** at some stops nobody is waiting and nobody pressed the stop button, so the player may pass through. That is a time bonus, but only if they read the cues correctly (stop light on the dashboard, people on the platform). Skipping a stop someone requested is a penalty.
+- **Request stops:** at some stops nobody is waiting and nobody pressed the stop button, so the player may pass through. That is a time bonus, but only if they read the cues correctly (stop light on the dashboard, people on the platform). Skipping a stop someone requested is a penalty. Passing an empty request stop scores like a GOOD stop and keeps the combo; stopping there anyway scores nothing (the timetable assumes the stop, so passing gains time).
 
 ### 6.2 Timetable
 
@@ -161,6 +161,8 @@ Hazards are scripted per route (placed at points along the track) with some rand
 - **Cyclists** riding in the track zone.
 - **Other trams:** a tram ahead at a busy stop or a single-track section with a **passing loop** where you must wait for the oncoming tram (a signal controls it).
 - **Special events:** a delivery truck blocking the track (stop and wait), a broken-down car, a parade or market day (slow zone).
+
+Implementation notes (M1): tram signals show a horizontal bar (stop), a blinking dot (about to change, 5 s) and a vertical bar (go); their phases form a **green wave** for the timetable, so a punctual tram meets the go aspect. Cross traffic starts on the stop aspect and gives way to a tram in the intersection unless it went through on stop. A hazard commits only while the tram can still stop calmly, and never once it could not stop with B4 after a short reaction, so every hazard is avoidable without luck. Because people are only a few pixels tall on a phone at the distances that matter, the HUD marks hazards worth watching with a small "!" and warns when something is on the tracks ahead.
 
 Telegraphing rule: every hazard must be **visible early** (people looking at the road, a car's indicator blinking, brake lights), so a good player can anticipate it rather than react to surprises. In numbers: a hazard's cue must be readable at least one full service stop plus ~2 s ahead at the current limit (~90 m at 50 km/h), so it can always be handled without the emergency brake. Fog and draw distance must never hide that zone.
 

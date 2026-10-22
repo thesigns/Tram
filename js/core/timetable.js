@@ -37,10 +37,16 @@ export function buildTimetable(track, limits, stops, tramCfg, route) {
       t += 1 / Math.max(0.3, (v[m - a] + v[m - a + 1]) / 2);
       tref[m + 1] = tref[a] + t;
     }
+    // an allowance for each tram signal on the way
+    for (const I of route.intersections ?? []) {
+      if (I.signal && I.s > stops[i].s && I.s <= stops[i + 1].s) t += T.signalAllowance;
+    }
     drive.push(t);
   }
 
-  const dwell = (st) => 2 * PHYSICS.doorTime + st.waiting * STOPS.boardInterval + STOPS.boardExtra + T.reaction;
+  // request stops are timed as if served – passing an empty one gains time
+  const dwell = (st) => 2 * PHYSICS.doorTime + (st.baseWaiting ?? st.waiting) * STOPS.boardInterval
+    + STOPS.boardExtra + T.reaction;
   const ceilTo = (t) => Math.ceil(t / T.round) * T.round;
   const slack = route.slack ?? T.slack;
   const last = stops.length - 1;

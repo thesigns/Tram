@@ -38,6 +38,16 @@ canvas#hud { pointer-events: none; }
 
 .hidden { display: none !important; }
 
+/* full-screen fade (the run ended by hitting someone) */
+#fade {
+  position: fixed;
+  inset: 0;
+  background: #0b0c0d;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.6s;
+}
+
 /* --- Touch controls --- */
 #controls { position: fixed; inset: 0; pointer-events: none; }
 #controls > * { pointer-events: auto; }

@@ -5,9 +5,11 @@ Low-poly 3D, a mobile-first browser game. Design: [docs/Tram-GDD.md](docs/Tram-G
 
 **Play: https://thesigns.github.io/Tram/**
 
-Status: **M0 prototype + first M1 features** – one test line with 4 stops, notched controller,
+Status: **M0 prototype + most of M1** – one test line with 4 stops, notched controller,
 tram physics, precision stopping with ratings and combos, interlocked doors, boarding, speed limits
-and curves (take one too fast and you derail), passenger comfort, a timetable, synthesized sound.
+and curves (take one too fast and you derail), passenger comfort, a timetable, tram signals,
+street hazards (turning cars, pedestrians, a double-parked van, a cyclist), the bell, request stops,
+synthesized sound.
 
 ## Running locally
 
@@ -41,6 +43,12 @@ costs points every second, and a curve taken far too fast derails the tram. Depa
 early costs more than leaving late. Drive smoothly: jumping notches, stopping on a hard brake
 (ease off to B1 just before the tram stops), the emergency brake and fast curves upset the passengers.
 The game clock runs 4× faster than real time.
+
+Read the street. Tram signals show a horizontal bar (stop), a dot (about to change) or a vertical
+bar (go); a punctual tram rides a green wave. Cars turn across the tracks, people step off the kerb,
+vans park too close to the rails and cyclists ride between them – the HUD marks hazards worth
+watching. Ring the bell to warn them (not too often). Hitting a person, or a car at speed, ends the run.
+At a request stop, stop only if the STOP lamp is lit or people are waiting; otherwise pass through.
 
 ## Layout
 
