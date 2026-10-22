@@ -5,6 +5,16 @@ import { clamp } from './utils.js';
 export const EB = -5;
 export const notchName = (n) => (n === EB ? 'EB' : n < 0 ? `B${-n}` : n > 0 ? `P${n}` : 'N');
 
+// Traction motor at full power: constant force up to the base speed, then constant power,
+// cut-off at max speed [m/s²].
+export function tractionAccel(cfg, v) {
+  return (cfg.tractiveForce * Math.min(1, cfg.baseSpeed / Math.max(v, 0.01))
+    * clamp((cfg.maxSpeed - v) / 1.5, 0, 1)) / cfg.mass;
+}
+
+// Rolling resistance, drag and the gradient while moving [m/s²].
+export const resistance = (v, grade) => PHYSICS.rolling + PHYSICS.aero * v * v + PHYSICS.g * grade;
+
 // Longitudinal tram dynamics along the track (GDD §5). Position = s, the distance of the front along the route.
 // Kept free of Three.js, so it can be tested in Node.
 export class Tram {
@@ -23,6 +33,8 @@ export class Tram {
     this.brake = 0;       // actual brake deceleration [m/s²]
     this.doors = 0;       // 0 = closed … 1 = fully open
     this.doorsTarget = 0;
+    this.da = 0;          // change of acceleration in the last step (comfort)
+    this.derailed = false;
   }
 
   get stopped() { return this.v === 0; }
@@ -41,22 +53,20 @@ export class Tram {
     const n = this.notch;
 
     // traction and brake effort build up gradually – jumping notches is felt as jerk, not hidden
-    const tracTarget = n > 0 && this.doorsClosed ? n / 4 : 0;
-    const brakeTarget = n === EB ? BRAKE.emergency : n < 0 ? BRAKE.service[-n - 1] : 0;
-    const tau = n === EB ? P.ebTau : P.effortTau;
+    let tracTarget = n > 0 && this.doorsClosed ? n / 4 : 0;
+    let brakeTarget = n === EB ? BRAKE.emergency : n < 0 ? BRAKE.service[-n - 1] : 0;
+    if (this.derailed) { tracTarget = 0; brakeTarget = P.derailDecel; }
+    const tau = n === EB || this.derailed ? P.ebTau : P.effortTau;
     const k = 1 - Math.exp(-dt / tau);
     this.traction += (tracTarget - this.traction) * k;
     this.brake += (brakeTarget - this.brake) * k;
 
     const v = this.v;
-    // traction motor: constant force up to the base speed, then constant power, cut-off at max speed
-    const force = cfg.tractiveForce * Math.min(1, cfg.baseSpeed / Math.max(v, 0.01))
-      * clamp((cfg.maxSpeed - v) / 1.5, 0, 1);
-    const aTraction = this.traction * force / cfg.mass;
+    const aTraction = this.traction * tractionAccel(cfg, v);
 
     let a;
     if (v > 0) {
-      a = aTraction - P.rolling - P.aero * v * v - P.g * grade - this.brake;
+      a = aTraction - resistance(v, grade) - this.brake;
     } else {
       // standing: brakes and rolling resistance hold the tram until the drive overcomes them (forward only)
       const drive = aTraction - P.g * grade;
@@ -74,9 +84,9 @@ export class Tram {
     }
     this.v = v2;
 
-    // jerk drives the comfort meter later (M1); lightly smoothed so it reads well in ?debug
-    const j = (a - this.a) / dt;
-    this.jerk += (j - this.jerk) * 0.2;
+    // the change of acceleration drives the comfort meter; jerk is lightly smoothed for ?debug
+    this.da = a - this.a;
+    this.jerk += (this.da / dt - this.jerk) * 0.2;
     this.a = a;
 
     // doors

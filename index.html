@@ -43,6 +43,7 @@
       <button id="start-btn" class="btn">DEPART</button>
       <div class="help">
         <p>Stop the tram front on the <b>H</b> marker, open the doors, let people board, close the doors, go.</p>
+        <p>Keep to the speed limits, depart on time and give your passengers a smooth ride.</p>
         <p class="touch-only"><b>Right thumb</b> – controller: up = power, down = brake, all the way down = emergency brake.<br><b>Left thumb</b> – doors and bell.</p>
         <p class="desk">W / S or ↑ / ↓ – controller · Space – emergency brake · E – doors · B – bell · P – pause</p>
       </div>
@@ -59,12 +60,14 @@
 
   <section id="results" class="screen hidden">
     <div class="card">
-      <h2>END OF THE LINE</h2>
+      <h2 id="res-title">END OF THE LINE</h2>
+      <p id="res-msg" class="meta"></p>
       <table class="res">
-        <thead><tr><th>Stop</th><th>Rating</th><th>Error</th><th>Pts</th></tr></thead>
+        <thead><tr><th>Stop</th><th>Stopping</th><th>Departure</th><th>Pts</th></tr></thead>
         <tbody id="res-rows"></tbody>
       </table>
-      <p class="score">Score <b id="res-score">0</b></p>
+      <dl id="res-breakdown" class="breakdown"></dl>
+      <p id="res-score-line" class="score">Score <b id="res-score">0</b></p>
       <p id="res-meta" class="meta"></p>
       <button id="again-btn" class="btn">DRIVE AGAIN</button>
     </div>

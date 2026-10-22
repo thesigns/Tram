@@ -3,9 +3,11 @@ import { SIM, TRAMS, VIEW, WORLD } from './config.js';
 import { EB, Tram } from './core/tram.js';
 import { Run } from './core/run.js';
 import { Input } from './core/input.js';
-import { clamp, damp } from './core/utils.js';
+import { clamp, damp, formatClock, formatDelta } from './core/utils.js';
 import { Track } from './world/track.js';
+import { SpeedLimits } from './world/limits.js';
 import { createCity } from './world/city.js';
+import { createSigns } from './world/signs.js';
 import { createSky } from './world/sky.js';
 import { Passengers } from './entities/passengers.js';
 import { createCab, setLamp, setSpeedo } from './models/cab.js';
@@ -13,7 +15,6 @@ import { Sound } from './audio/sound.js';
 import { Hud, RATING_COLORS } from './ui/hud.js';
 
 const $ = (id) => document.getElementById(id);
-const isTouch = matchMedia('(pointer: coarse)').matches;
 const debug = new URLSearchParams(location.search).has('debug');
 
 let route;
@@ -61,9 +62,10 @@ const cabCam = new THREE.PerspectiveCamera(60, 1, 0.02, 10);
 const tramCfg = TRAMS.classic;
 const track = new Track(route.pieces);
 const tram = new Tram(tramCfg);
-const run = new Run(route, tramCfg, onRunEvent);
+const limits = new SpeedLimits(track, route, tramCfg.length);
+const run = new Run(route, tramCfg, track, limits, onRunEvent);
 const city = createCity(track, run.stops, route.seed);
-scene.add(city.group);
+scene.add(city.group, createSigns(track, limits));
 const passengers = new Passengers(scene, track, run.stops, route.seed);
 const input = new Input();
 const sound = new Sound();
@@ -99,6 +101,20 @@ function onRunEvent(type, d) {
         '#ff8a70', 2.8);
       sound.penalty();
       break;
+    case 'departure':
+    case 'arrival': {
+      const pts = d.points > 0 ? `+${d.points}` : `−${-d.points}`;
+      const text = d.verdict === 'ON TIME' ? `On time  ${pts}` : `${d.verdict === 'LATE' ? 'Late' : 'Early'} ${formatDelta(d.dev)}  ${pts}`;
+      hud.showNotice(text, PUNCT_COLORS[d.verdict], 2.6);
+      if (d.verdict !== 'ON TIME') sound.penalty();
+      break;
+    }
+    case 'derail':
+      hud.showRating('DERAILED', `${Math.round(d.kmh)} km/h in a ${d.limit} km/h curve`, RATING_COLORS.MISSED);
+      sound.derail();
+      cam.crash = 1;
+      game.endTimer = 2.8;
+      break;
     case 'board': passengers.board(d.stop, d.k); break;
     case 'ready': sound.beep(); break;
     case 'hint': hud.showNotice(d.text, '#f2c230', 1.4); break;
@@ -106,6 +122,8 @@ function onRunEvent(type, d) {
     default:
   }
 }
+
+const PUNCT_COLORS = { 'ON TIME': '#9fe05e', LATE: '#ff8a70', EARLY: '#ff8a70' };
 
 // ---------- controls ----------
 input.onNotch = (n) => {
@@ -123,7 +141,6 @@ input.onPause = togglePause;
 // ---------- game flow ----------
 function startRun() {
   sound.init();
-  if (isTouch) enterFullscreen();
   tram.reset(run.stops[0].s);
   run.reset();
   passengers.reset();
@@ -131,9 +148,10 @@ function startRun() {
   game.prevS = tram.s;
   game.acc = 0;
   game.endTimer = 0;
+  cam.crash = 0;
   sound.lastS = null;
   setMode('playing');
-  hud.showRating('DEPART', `Next stop: ${run.target.name}`, '#f8f4e8');
+  hud.showRating(`DEP ${formatClock(run.timetable.dep[0]).slice(0, 5)}`, `Next stop: ${run.target.name}`, '#f8f4e8');
 }
 
 function setMode(mode) {
@@ -158,32 +176,70 @@ function togglePause() {
 // darker shades of the HUD rating colors, readable on the light card
 const RESULT_COLORS = { PERFECT: '#1f8a4c', GREAT: '#4f8a1f', GOOD: '#9a7400', OK: '#b5651d', MISSED: '#c8382c' };
 
+const RESULT_PUNCT = { 'ON TIME': '#1f8a4c', LATE: '#c8382c', EARLY: '#c8382c' };
+
+// A table cell with a main line and an optional small second line.
+function cell(main, sub, color) {
+  const td = document.createElement('td');
+  const b = document.createElement('span');
+  b.textContent = main;
+  if (color) b.style.color = color;
+  td.appendChild(b);
+  if (sub) {
+    const s = document.createElement('small');
+    s.textContent = sub;
+    td.appendChild(s);
+  }
+  return td;
+}
+
+const passengerVerdict = (c) => (c >= 90 ? 'delighted' : c >= 75 ? 'comfortable' : c >= 55 ? 'shaken' : 'seasick');
+const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
+
 function showResults() {
   setMode('results');
   sound.suspend();
+  const failed = run.phase === 'failed';
+  $('res-title').textContent = failed ? 'DERAILED' : 'END OF THE LINE';
+  $('res-msg').textContent = failed
+    ? `${Math.round(run.fail.kmh)} km/h in a ${run.fail.limit} km/h curve – the run is over.`
+    : `Passengers were ${passengerVerdict(run.comfort.average)}.`;
+
   const body = $('res-rows');
   body.replaceChildren();
   for (const r of run.results) {
     const tr = document.createElement('tr');
-    const cells = [r.name, r.rating, r.rating === 'MISSED' ? '–' : fmtError(r.error), r.points];
-    cells.forEach((text, i) => {
-      const td = document.createElement('td');
-      td.textContent = text;
-      if (i === 1) td.style.color = RESULT_COLORS[r.rating];
-      tr.appendChild(td);
-    });
+    tr.appendChild(cell(r.name));
+    const start = r.rating === 'START';
+    tr.appendChild(cell(start ? '–' : r.rating, start || r.rating === 'MISSED' ? '' : fmtError(r.error), RESULT_COLORS[r.rating]));
+    tr.appendChild(r.punct ? cell(formatDelta(r.dev), r.punct.toLowerCase(), RESULT_PUNCT[r.punct]) : cell('–'));
+    tr.appendChild(cell(signed(r.points + r.punctPoints)));
     body.appendChild(tr);
   }
+
+  const p = run.pts;
+  const dl = $('res-breakdown');
+  dl.replaceChildren();
+  const items = [
+    ['Stops', p.stops],
+    ['Punctuality', p.punctuality],
+    [`Comfort (average ${Math.round(run.comfort.average)}%)`, p.comfort],
+    ['Overspeed', p.overspeed],
+    ['Penalties', p.penalties],
+  ];
+  for (const [label, value] of items) {
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = signed(value);
+    dl.append(dt, dd);
+  }
+  dl.classList.toggle('hidden', failed);
+  $('res-score-line').classList.toggle('hidden', failed);
   $('res-score').textContent = run.score;
   const t = Math.round(run.time);
   $('res-meta').textContent = `Time ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')} · best combo ×${run.bestCombo}`;
-}
-
-async function enterFullscreen() {
-  try {
-    const el = document.documentElement;
-    if (!document.fullscreenElement && el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
-  } catch { /* e.g. iOS – not supported, keep playing */ }
+  $('again-btn').textContent = failed ? 'TRY AGAIN' : 'DRIVE AGAIN';
 }
 
 // ---------- camera ----------
@@ -193,7 +249,7 @@ const _e = new THREE.Euler(0, 0, 0, 'YXZ');
 const bodyQ = new THREE.Quaternion();
 const _inv = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
-const cam = { lean: 0, roll: 0, t: 0 };
+const cam = { lean: 0, roll: 0, t: 0, crash: 0 };
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -208,8 +264,11 @@ function updateCamera(s, dt) {
   const gaze = _a.h + wrapAngle(Math.atan2(_b.x - _a.x, -(_b.z - _a.z)) - _a.h) * 0.7;
   // lean back when accelerating, forward when braking; sway outwards in curves
   cam.lean = damp(cam.lean, clamp(tram.a * 0.008, -0.025, 0.02), 4, dt);
-  cam.roll = damp(cam.roll, clamp(-_a.k * tram.v * tram.v * 0.02, -0.02, 0.02), 3, dt);
-  const amp = 0.0006 * clamp(tram.v / 14, 0, 1.2);
+  // derailment: the body lurches to the outside of the curve and shakes until it stops
+  const curve = run.curve;
+  const lurch = cam.crash > 0 ? 0.12 * (curve ? -curve.dir : 1) : 0;
+  cam.roll = damp(cam.roll, clamp(-_a.k * tram.v * tram.v * 0.02, -0.02, 0.02) + lurch, 3, dt);
+  const amp = 0.0006 * clamp(tram.v / 14, 0, 1.2) + (tram.derailed && tram.v > 0 ? 0.02 : 0);
   const bob = (Math.sin(cam.t * 31) + Math.sin(cam.t * 17.3)) * amp;
   _e.set(VIEW.headTilt + Math.atan(_a.grade) + cam.lean + bob, -gaze, cam.roll + Math.sin(cam.t * 23.1) * amp * 0.5, 'YXZ');
   camera.quaternion.setFromEuler(_e);
@@ -281,7 +340,7 @@ function frame(now) {
     // interlock warning beep while power is selected with the doors open
     game.beepTimer -= dt;
     if (tram.interlocked && game.beepTimer <= 0) { sound.beep(); game.beepTimer = 0.5; }
-    sound.update(tram);
+    sound.update(tram, run);
   }
 
   const alpha = game.mode === 'playing' ? game.acc / STEP : 1;
@@ -327,7 +386,7 @@ tram.reset(run.stops[0].s);
 game.prevS = tram.s;
 resize();
 setMode('menu');
-if (debug) window.tram = { game, tram, run, track, input, sound, camera, EB };
+if (debug) window.tram = { game, tram, run, track, limits, input, sound, camera, EB };
 Promise.race([document.fonts?.load('700 16px "Barlow Condensed"'), new Promise((r) => setTimeout(r, 1500))])
   .catch(() => {})
   .finally(() => $('loading').classList.add('hidden'));

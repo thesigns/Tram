@@ -5,8 +5,9 @@ Low-poly 3D, a mobile-first browser game. Design: [docs/Tram-GDD.md](docs/Tram-G
 
 **Play: https://thesigns.github.io/Tram/**
 
-Status: **M0 prototype** – one test line with 4 stops, notched controller, tram physics,
-precision stopping with ratings and combos, interlocked doors, boarding, synthesized sound.
+Status: **M0 prototype + first M1 features** – one test line with 4 stops, notched controller,
+tram physics, precision stopping with ratings and combos, interlocked doors, boarding, speed limits
+and curves (take one too fast and you derail), passenger comfort, a timetable, synthesized sound.
 
 ## Running locally
 
@@ -34,6 +35,12 @@ On a phone in the same network, open `http://<computer-IP>:8765/`, or use GitHub
 Stop the tram front on the **H** marker, open the doors, wait for boarding, close the doors and depart.
 The closer to the marker, the better the rating (PERFECT ≤ 0.5 m, GREAT ≤ 1.5 m, GOOD ≤ 3 m);
 consecutive PERFECT/GREAT stops build a combo.
+
+Keep to the speed limits (the sign next to the speed; a lower limit ahead is announced) – overspeed
+costs points every second, and a curve taken far too fast derails the tram. Depart on time: leaving
+early costs more than leaving late. Drive smoothly: jumping notches, stopping on a hard brake
+(ease off to B1 just before the tram stops), the emergency brake and fast curves upset the passengers.
+The game clock runs 4× faster than real time.
 
 ## Layout
 

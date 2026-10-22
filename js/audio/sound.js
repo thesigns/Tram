@@ -1,3 +1,4 @@
+import { COMFORT } from '../config.js';
 import { clamp } from '../core/utils.js';
 
 const JOINT = 15;                       // rail length between joints [m]
@@ -53,9 +54,17 @@ export class Sound {
     vib.connect(vibGain).connect(this.squeal.frequency);
     this.squealGain = gain();
     this.squeal.connect(this.squealGain).connect(this.master);
+
+    // wheel flanges grinding in a curve taken too fast
+    const flange = osc('sawtooth', 3400);
+    const wobble = osc('sine', 13);
+    const wobbleGain = gain(160);
+    wobble.connect(wobbleGain).connect(flange.frequency);
+    this.flangeGain = gain();
+    flange.connect(filter('bandpass', 3400, 6)).connect(this.flangeGain).connect(this.master);
   }
 
-  update(tram) {
+  update(tram, run) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime, v = tram.v;
     const moving = clamp(v / 2, 0, 1);
@@ -71,6 +80,8 @@ export class Sound {
     this.rollGain.gain.setTargetAtTime(sp * 0.16, t, 0.15);
     const squeal = tram.brake > 0.5 && v > 0.05 && v < 2.2 ? 0.035 : 0;
     this.squealGain.gain.setTargetAtTime(squeal, t, squeal ? 0.15 : 0.05);
+    const excess = clamp((run.lateral - COMFORT.lateralFree) / COMFORT.lateralFree, 0, 1);
+    this.flangeGain.gain.setTargetAtTime(excess > 0 && v > 0.5 ? 0.02 + excess * 0.12 : 0, t, 0.08);
 
     // rail joints under each axle
     if (this.lastS !== null && v > 0.3) {
@@ -160,6 +171,12 @@ export class Sound {
   }
 
   penalty() { this.thump(0.3, 220, 110, 0.25); }
+
+  derail() {
+    this.burst(0.9, 500, 1.8, 0.4, 'lowpass');
+    this.burst(0.5, 2600, 1.2, 3);
+    this.thump(0.8, 110, 35, 0.9);
+  }
 
   suspend() { this.ctx?.suspend(); }
   resume() { this.ctx?.resume(); }

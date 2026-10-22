@@ -1,6 +1,11 @@
 {
   "name": "Test Line",
   "seed": 11,
+  "speed": 50,
+  "startTime": "06:12",
+  "limits": [
+    { "from": 990, "to": 1090, "kmh": 30 }
+  ],
   "pieces": [
     { "type": "straight", "length": 220 },
     { "type": "curve", "radius": 150, "angle": 20, "dir": "right" },

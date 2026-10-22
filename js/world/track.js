@@ -9,12 +9,14 @@ export class Track {
   constructor(pieces, step = 2) {
     const s = [0], x = [0], y = [0], z = [0], h = [0];
     const k = [], g = [];   // per interval between sample i and i + 1
+    const spans = [];       // the pieces by distance: { s0, s1, k, limit }
     let cs = 0, cx = 0, cy = 0, cz = 0, ch = 0;
     for (const p of pieces) {
       const curve = p.type === 'curve';
       const len = curve ? p.radius * p.angle * Math.PI / 180 : p.length;
       const kk = curve ? (p.dir === 'left' ? -1 : 1) / p.radius : 0;
       const grade = (p.grade ?? 0) / 100;
+      spans.push({ s0: cs, s1: cs + len, k: kk, limit: p.limit });
       const n = Math.max(1, Math.ceil(len / step));
       const ds = len / n;
       for (let i = 0; i < n; i++) {
@@ -34,7 +36,7 @@ export class Track {
         s.push(cs); x.push(cx); y.push(cy); z.push(cz); h.push(ch);
       }
     }
-    Object.assign(this, { s, x, y, z, h, k, g });
+    Object.assign(this, { s, x, y, z, h, k, g, spans });
     this.length = cs;
     this._i = 0;
   }

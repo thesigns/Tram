@@ -91,7 +91,7 @@ The tram runs along a track centreline, so its position is a single number `s`, 
 - **Adhesion:** a wet or leafy rail lowers the available grip. Too much power or brake causes wheel slip or slide (warning light plus sound). A **sand** button could be added later.
 - **Mass:** each tram type has a different mass, so different inertia and braking distances. That is the main "feel" difference between vehicles.
 - **Jerk:** the rate of change of acceleration drives the **comfort meter**. Moving smoothly through the notches keeps passengers happy.
-- **Curves:** each curve has a safe speed. Over it, there is wheel squeal and a comfort penalty; far over it (arcade threshold, e.g. +40%), the tram **derails** and the run fails.
+- **Curves:** each curve has a safe speed, v = √(0.7 m/s² · R), signed rounded down to 5 km/h (R 100 m → 30 km/h, R 25 m → 15 km/h). Over it, there is wheel squeal and a comfort penalty; far over it (arcade threshold, +40%), the tram **derails** and the run fails. A higher limit applies only once the whole tram has passed its sign.
 
 Target feel: close to a real tram, compressed slightly for arcade pacing (the numbers below already include that):
 
@@ -128,6 +128,7 @@ A normal stop is a long, readable approach, which is what makes precision stoppi
 - The tram **departs** when it starts moving after the doors have closed.
 - **Punctuality:** departing between 0:05 early and 0:30 late (≈ 1 s early to 8 s late in real time) counts as on time and scores full points. Departing later is a penalty that grows with the delay. **Departing early** (more than 0:05) is a bigger penalty, because passengers get left behind. The window is asymmetric on purpose: waiting for the departure time is always in the player's hands, while recovering a delay often is not.
 - The HUD shows the delta to schedule (`+0:12`, `−0:05`) and, while the tram is at a stop, a countdown to departure.
+- Scheduled times are generated from a reference driving profile (full power to just under the limits, braking at 1.0 m/s², the expected dwell) and rounded up, so every timetable is achievable and tight. A route can loosen it with a slack factor (e.g. for the tutorial city) or fix individual times.
 
 ### 6.3 Passengers and comfort
 
