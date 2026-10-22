@@ -3,6 +3,8 @@
 Drive a tram from the motorman's cab, stop on the mark, keep the passengers happy.
 Low-poly 3D, a mobile-first browser game. Design: [docs/Tram-GDD.md](docs/Tram-GDD.md).
 
+**Play: https://thesigns.github.io/Tram/**
+
 Status: **M0 prototype** – one test line with 4 stops, notched controller, tram physics,
 precision stopping with ratings and combos, interlocked doors, boarding, synthesized sound.
 
