@@ -130,15 +130,13 @@ export class Hud {
     this.text(clock, x0, y + 44, 16, DIM, 'left', 600);
     this.text(sched, x0 + cw + gap, y + 44, 16, schedColor, 'left', 700);
 
-    // prompts, most urgent first
+    // prompts, most urgent first; overspeed has none – the speed turns red, the comfort bar, the shaking and the sound tell it
     let prompt = null, color = INK;
     const points = run.street.nextJunction(tram.s);
     const standing = tram.stopped && run.phase === 'drive' && run.departPending !== null;
     if (tram.interlocked) { prompt = blink ? 'DOORS OPEN – NO TRACTION' : ''; color = RED; }
-    else if (run.curve && tram.v > run.curve.safe) { prompt = blink ? 'TOO FAST FOR THE CURVE!' : ''; color = RED; }
     else if (tram.slide) { prompt = blink ? 'WHEELS SLIDING – EASE THE BRAKE' : ''; color = RED; }
     else if (tram.slip) { prompt = blink ? 'WHEELS SLIPPING – LESS POWER' : ''; color = RED; }
-    else if (run.overspeed > LIMITS.tolerance) { prompt = blink ? 'TOO FAST – THE TRAM IS SHAKING' : ''; color = RED; }
     else if (points && points.target !== points.way && points.s - tram.s < JUNCTION.warn) {
       prompt = blink ? `POINTS SET WRONG – TAP ${ARROW[points.way]}` : '';
       color = AMBER;

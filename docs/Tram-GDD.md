@@ -221,7 +221,7 @@ Kept minimal and diegetic where possible.
 - Top: **next stop name**, distance to the marker, schedule delta (a departure countdown while at a stop), clock.
 - Speed and current **speed limit** (also as a lineside sign in the world).
 - The passengers (one segment each, by mood) and the comfort meter; the score only at the end.
-- Contextual prompts: junction arrows, "Doors", stop rating popups (PERFECT!), hazard warning icon when something is about to enter the track.
+- Contextual prompts: junction arrows, "Doors", stop rating popups (PERFECT!), hazard warning icon when something is about to enter the track. Text prompts only say what the player can't see and must act on (doors open – no traction, wheels sliding or slipping, points set wrong); driving too fast has none – the red speed, the comfort bar, the shaking and the sound are enough.
 
 ## 12. Audio
 
