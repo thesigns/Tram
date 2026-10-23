@@ -1,0 +1,6 @@
+{
+  "lines": [
+    { "id": "altstadt-1", "file": "altstadt-1.json", "city": "Altstadt", "name": "Line 1", "from": "Hauptbahnhof", "to": "Domplatz", "stops": 8, "unlock": 0 },
+    { "id": "test", "file": "test-line.json", "city": "Training", "name": "Test Line", "from": "Tram Depot", "to": "Cathedral Square", "stops": 4, "unlock": 0 }
+  ]
+}

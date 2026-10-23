@@ -61,6 +61,7 @@ function blinkerGeo(len, wid, y, side) {
 }
 
 const blinkMat = new THREE.MeshBasicMaterial({ color: 0xffa020 });
+blinkMat.userData.shared = true;
 
 // Signal lamp symbols: stop = horizontal bar, prepare = dot, go = vertical bar (white on black).
 function lampTexture(symbol, lit) {
@@ -124,6 +125,11 @@ export class TrafficView {
       return { sg, lamps };
     });
     this.group.add(new THREE.Mesh(b.build(), flatMaterial));
+  }
+
+  // Lamp materials are swapped, so not all of them are in the scene graph when the world is disposed.
+  dispose() {
+    for (const pair of Object.values(this.lampMats)) for (const m of pair) { m.map.dispose(); m.dispose(); }
   }
 
   // Screen positions above hazards worth watching (GDD §7 telegraphing): people at the kerb, a car

@@ -1,6 +1,10 @@
 {
+  "id": "test",
   "name": "Test Line",
+  "city": "Training",
+  "look": "modern",
   "seed": 11,
+  "stars": [2000, 3800, 5200],
   "speed": 50,
   "startTime": "06:12",
   "limits": [

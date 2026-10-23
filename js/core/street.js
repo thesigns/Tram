@@ -2,7 +2,6 @@ import { STREET, TIMETABLE } from '../config.js';
 import { mulberry32 } from './utils.js';
 
 const { PI } = Math;
-const KERB = 7.6;   // where pedestrians wait, lateral distance from the track
 const WALK = 1.5;   // walking speed [m/s]
 
 // How far ahead the tram can still stop. A hazard commits only inside the "commit" distance (a calm
@@ -104,14 +103,15 @@ class Jaywalker {
     this.agent = st.add(agent('ped', 0.45, 0.45));
   }
 
-  reset(rnd) {
+  reset(rnd, st) {
     const d = this.def;
+    this.kerb = st.roadHalf + 0.6;   // waiting on the kerb
     this.active = rnd() < (d.chance ?? 1);
     this.side = d.side === 'left' ? -1 : d.side === 'right' ? 1 : rnd() < 0.5 ? 1 : -1;
     this.patient = false;
     this.timer = 0;
     Object.assign(this.agent, {
-      visible: this.active, state: 'wait', s: d.s + (rnd() - 0.5) * 6, off: this.side * KERB,
+      visible: this.active, state: 'wait', s: d.s + (rnd() - 0.5) * 6, off: this.side * this.kerb,
       dir: (-this.side * PI) / 2, speed: 0, step: 0, cooldown: 0, color: Math.floor(rnd() * 8),
     });
   }
@@ -138,7 +138,7 @@ class Jaywalker {
         const passed = tram.s - st.length > p.s + 1;
         if (this.patient && !passed) break;
         const dist = p.s - 0.5 - tram.s;
-        const lead = (KERB - STREET.envelope) / WALK;
+        const lead = (this.kerb - STREET.envelope) / WALK;
         if (passed || dist <= commitDist(tram.v) + tram.v * lead * 0.6) {
           if (passed || dist >= fairDist(tram.v)) { p.state = 'walk'; p.speed = WALK; } else this.patient = true;
         }
@@ -147,15 +147,15 @@ class Jaywalker {
       case 'walk':
         p.off += toward * p.speed * dt;
         p.step += p.speed * dt;
-        if (p.off * toward >= KERB) {
-          Object.assign(p, { off: toward * KERB, state: 'away', dir: 0, speed: 1.2 });
+        if (p.off * toward >= this.kerb) {
+          Object.assign(p, { off: toward * this.kerb, state: 'away', dir: 0, speed: 1.2 });
           this.timer = 10;
         }
         break;
       case 'back':
         p.off += this.side * 1.8 * dt;
         p.step += 1.8 * dt;
-        if (p.off * this.side >= KERB) Object.assign(p, { off: this.side * KERB, state: 'wait', dir: (toward * PI) / 2 });
+        if (p.off * this.side >= this.kerb) Object.assign(p, { off: this.side * this.kerb, state: 'wait', dir: (toward * PI) / 2 });
         break;
       case 'away':
         p.s += p.speed * dt;
@@ -189,7 +189,7 @@ class Parked {
     if (this.agent.state === 'parked') { this.agent.state = 'driver'; this.timer = 2.5; }
   }
 
-  update(dt, tram) {
+  update(dt, tram, st) {
     if (!this.active) return;
     const v = this.agent;
     switch (v.state) {
@@ -206,11 +206,12 @@ class Parked {
         break;
       case 'pull': {
         v.speed = Math.min(6, v.speed + 2 * dt);
-        const ds = v.speed * dt, doff = Math.min(1.4 * dt, 5.5 - v.off);
+        const lane = st.roadHalf - 1.5;   // the outer lane
+        const ds = v.speed * dt, doff = Math.min(1.4 * dt, lane - v.off);
         v.s += ds;
         v.off += doff;
         v.dir = Math.atan2(doff, Math.max(ds, 1e-6));
-        if (v.off >= 5.5 - 1e-6) Object.assign(v, { state: 'drive', dir: 0, blink: null });
+        if (v.off >= lane - 1e-6) Object.assign(v, { state: 'drive', dir: 0, blink: null });
         break;
       }
       case 'drive':
@@ -232,12 +233,12 @@ class Cyclist {
     this.agent = st.add(agent('bike', 1.8, 0.6));
   }
 
-  reset(rnd) {
+  reset(rnd, st) {
     this.active = rnd() < (this.def.chance ?? 1);
     this.aside = 0;
     this.patient = false;
     Object.assign(this.agent, {
-      visible: this.active, state: 'wait', s: this.def.s, off: 5.4, dir: 0, speed: 0, cooldown: 0, step: 0,
+      visible: this.active, state: 'wait', s: this.def.s, off: st.roadHalf - 1.6, dir: 0, speed: 0, cooldown: 0, step: 0,
       color: Math.floor(rnd() * 8),
     });
   }
@@ -377,8 +378,9 @@ const HAZARDS = { leftTurn: LeftTurn, jaywalker: Jaywalker, parked: Parked, cycl
 // against the tram's swept path. Events go to onEvent(type, data): red, collision.
 // Kept free of Three.js, so it can be tested in Node.
 export class Street {
-  constructor(route, track, timetable, tramLength, onEvent) {
+  constructor(route, track, timetable, tramLength, roadHalf, onEvent) {
     this.length = tramLength;
+    this.roadHalf = roadHalf;
     this.end = track.length;
     this.onEvent = onEvent;
     this.agents = [];
@@ -402,7 +404,7 @@ export class Street {
     this.time = 0;
     this.warning = null;
     for (const sg of this.signals) sg.reset();
-    for (const h of this.hazards) h.reset(this.rnd);
+    for (const h of this.hazards) h.reset(this.rnd, this);
   }
 
   // Hazards within earshot react to the bell.

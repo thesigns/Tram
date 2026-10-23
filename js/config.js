@@ -101,6 +101,7 @@ export const STOPS = {
   requestAlight: 0.5,     // otherwise: chance that it's somebody inside pressing the button
   requestSkipPoints: 400, // passing an empty request stop
   requestMissPenalty: 300, // passing a request stop somebody needed
+  continuePenalty: 1000,  // continuing from the last served stop after a failed run
 };
 
 // The street: signals, traffic and hazards (GDD §7).
@@ -132,11 +133,40 @@ export const CITY = {
   chunk: 100,             // street geometry is merged per chunk of this length
   drawAhead: 650,
   drawBehind: 40,
-  roadHalf: 7,
-  facade: 10,             // building line, lateral distance from the track
   poleSpacing: 30,
   gauge: 1.435,
-  palette: ['#d9c7a3', '#c98f6b', '#e0d6b8', '#b8c4b0', '#d4a373', '#a8b5c4', '#e6c79c', '#c4a6a0'],
+  foundation: 30,         // buildings reach this far below the street, so hills never show a gap [m]
+};
+
+// Street looks per city (route `look`): the street profile, paving, buildings (GDD §13).
+export const LOOKS = {
+  modern: {
+    roadHalf: 7,          // road edge (kerb), lateral distance from the track
+    facade: 10,           // building line
+    road: '#55585c',
+    trackbed: '#7a7266',
+    sidewalk: '#a49e94',
+    curb: '#8d877e',
+    dashes: true,         // lane markings
+    floors: [3, 6],
+    roofs: 0,             // share of pitched roofs
+    palette: ['#d9c7a3', '#c98f6b', '#e0d6b8', '#b8c4b0', '#d4a373', '#a8b5c4', '#e6c79c', '#c4a6a0'],
+    roofColors: ['#8a7f70'],
+  },
+  // the old town: narrow cobbled streets, lower houses with pitched roofs, warm colours
+  altstadt: {
+    roadHalf: 5.5,
+    facade: 8,
+    road: '#6e655b',
+    trackbed: '#655c53',
+    sidewalk: '#9c9184',
+    curb: '#857a6d',
+    dashes: false,
+    floors: [2, 4],
+    roofs: 0.8,
+    palette: ['#e2c58f', '#d98e5f', '#efe0bd', '#b9c7a5', '#d6a35b', '#c9b6d6', '#f0d39a', '#d2a19a', '#a9c1c9'],
+    roofColors: ['#a5532f', '#8c4a2f', '#9a5a3a', '#4f545c'],
+  },
 };
 
 export const WORLD = {

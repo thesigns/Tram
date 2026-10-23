@@ -294,10 +294,10 @@ Synthesised with Web Audio where possible (the *Jasta* approach, no audio files 
 
 1. Final name? (Candidates: *Tram*, *Ding Ding*, *Motorman*, *Next Stop*, *Last Tram*.)
 2. Notched lever only, or offer the continuous mode from the start?
-3. How punishing are fails? Restart the run, or restart from the last stop?
+3. ~~How punishing are fails? Restart the run, or restart from the last stop?~~ **Decided (M1):** after a failed run the player may continue from the last served stop for −1000 points (no perfect-run badge, no stars lost otherwise), or restart the line.
 4. Should the player ever drive the depot pull-out or a reversing move (stub terminus), or keep everything forward-only?
 5. Passengers as a resource (capacity, crowding) or purely cosmetic plus rating?
-6. Stylised fictional country (consistent signage language and names) – e.g. Central European flavour?
+6. ~~Stylised fictional country (consistent signage language and names) – e.g. Central European flavour?~~ **Decided (M1):** a Central European flavour with German-sounding names (Altstadt, Hauptbahnhof, Kornmarkt, Domplatz); UI stays in English.
 7. Monetisation: none (hobby project), or an optional "support" link?
 
 ## Appendix A: Carry-over from *Jasta 11*

@@ -40,8 +40,8 @@
   <section id="menu" class="screen">
     <div class="card">
       <h1>TRAM</h1>
-      <p class="sub">Test Line · prototype</p>
-      <button id="start-btn" class="btn">DEPART</button>
+      <p class="sub">Choose a line <span id="menu-stars" class="menu-stars"></span></p>
+      <div id="lines" class="lines"></div>
       <div class="help">
         <p>Stop the tram front on the <b>H</b> marker, open the doors, let people board, close the doors, go.</p>
         <p>Keep to the speed limits, depart on time and give your passengers a smooth ride.</p>
@@ -57,6 +57,7 @@
       <h2>PAUSED</h2>
       <button id="resume-btn" class="btn">RESUME</button>
       <button id="restart-btn" class="btn btn-alt">RESTART</button>
+      <button id="pause-lines-btn" class="btn btn-alt">LINES</button>
     </div>
   </section>
 
@@ -64,6 +65,8 @@
     <div class="card">
       <h2 id="res-title">END OF THE LINE</h2>
       <p id="res-msg" class="meta"></p>
+      <p id="res-stars" class="stars"></p>
+      <p id="res-badges" class="badges"></p>
       <table class="res">
         <thead><tr><th>Stop</th><th>Stopping</th><th>Departure</th><th>Pts</th></tr></thead>
         <tbody id="res-rows"></tbody>
@@ -71,7 +74,9 @@
       <dl id="res-breakdown" class="breakdown"></dl>
       <p id="res-score-line" class="score">Score <b id="res-score">0</b></p>
       <p id="res-meta" class="meta"></p>
+      <button id="continue-btn" class="btn hidden">CONTINUE</button>
       <button id="again-btn" class="btn">DRIVE AGAIN</button>
+      <button id="lines-btn" class="btn btn-alt">LINES</button>
     </div>
   </section>
 

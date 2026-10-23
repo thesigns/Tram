@@ -1,4 +1,4 @@
-import { COMFORT, LIMITS, STOPS, STREET, TIMETABLE } from '../config.js';
+import { COMFORT, LIMITS, LOOKS, STOPS, STREET, TIMETABLE } from '../config.js';
 import { Comfort } from './comfort.js';
 import { Street } from './street.js';
 import { buildTimetable } from './timetable.js';
@@ -6,8 +6,9 @@ import { mulberry32 } from './utils.js';
 
 // One run along a route: precision stops, doors, boarding, speed limits, comfort, timetable, the street
 // and the score (GDD §6, §7). stops[0] is where the run starts (doors closed, departure due); the last
-// stop is the terminus. Events go out through emit(type, data): rating, missed, skipped, request, penalty,
-// board, ready, departure, arrival, bump, fail, done, hint.
+// stop is the terminus. After a failure the run can continue from the last served stop (a checkpoint).
+// Events go out through emit(type, data): rating, missed, skipped, request, penalty, board, ready,
+// departure, arrival, bump, fail, done, hint.
 export class Run {
   constructor(route, tramCfg, track, limits, emit) {
     this.tramCfg = tramCfg;
@@ -32,13 +33,17 @@ export class Run {
       };
     });
     this.timetable = buildTimetable(track, limits, this.stops, tramCfg, route);
-    this.street = new Street(route, track, this.timetable, tramCfg.length, (type, d) => this.streetEvent(type, d));
+    const roadHalf = LOOKS[route.look ?? 'modern'].roadHalf;
+    this.street = new Street(route, track, this.timetable, tramCfg.length, roadHalf, (type, d) => this.streetEvent(type, d));
     this.comfort = new Comfort();
     this.reset();
   }
 
   // seed: hazards and request stops differ from run to run
   reset(seed = Math.floor(Math.random() * 2 ** 31)) {
+    this.seed = seed;
+    this.continues = 0;
+    this.continueCost = 0;      // kept outside the checkpoints, so every continue costs
     this.idx = 1;               // target stop
     this.phase = 'drive';       // drive | board | ready | done | failed
     this.pts = { stops: 0, punctuality: 0, comfort: 0, overspeed: 0, penalties: 0 };
@@ -73,13 +78,57 @@ export class Run {
     this.street.reset(seed);
 
     // per stop: { name, rating, error, points, dev, punct, punctPoints }
-    this.results = [{ name: this.stops[0].name, rating: 'START', error: null, points: 0, dev: null, punct: null, punctPoints: 0 }];
+    this.results = [{ stop: 0, name: this.stops[0].name, rating: 'START', error: null, points: 0, dev: null, punct: null, punctPoints: 0 }];
     this.byStop = { 0: this.results[0] };
+    this.checkpoint = this.snapshot();
+  }
+
+  // Everything needed to continue from the stop the tram stands at, served, doors closed.
+  snapshot() {
+    const c = this.comfort;
+    return {
+      idx: this.idx, served: this.departPending, time: this.time, combo: this.combo, bestCombo: this.bestCombo,
+      pts: { ...this.pts }, results: this.results.map((r) => ({ ...r })),
+      comfort: { value: c.value, sum: c.sum, time: c.time },
+    };
+  }
+
+  get canContinue() { return this.phase === 'failed' && !!this.checkpoint; }
+
+  // Back to the last served stop after a failure, for a penalty (GDD §17, question 3).
+  continueRun(tram) {
+    const c = this.checkpoint;
+    Object.assign(this, {
+      idx: c.idx, departPending: c.served, time: c.time, combo: c.combo, bestCombo: c.bestCombo,
+      phase: 'drive', fail: null, overAcc: 0, stopRequested: false, curve: null, lateral: 0, delta: 0,
+    });
+    this.pts = { ...c.pts };
+    this.results = c.results.map((r) => ({ ...r }));
+    this.byStop = Object.fromEntries(this.results.map((r) => [r.stop, r]));
+    Object.assign(this.comfort, c.comfort, { recent: 0, lastNotch: 0 });
+    const s = this.stops[c.served].s;
+    tram.reset(s);
+    this.prevS = s;
+    this.limit = this.limits.at(s);
+    this.countdown = this.timetable.dep[c.served] - this.clock;
+    this.street.reset(this.seed);
+    this.street.time = this.time;
+    this.continues++;
+    this.continueCost += STOPS.continuePenalty;
+    this.emit('penalty', { reason: 'continue', points: STOPS.continuePenalty });
+  }
+
+  // No penalties, no overspeed, no continues, every stop GREAT or better (or rightly passed), always on time.
+  get perfect() {
+    const p = this.pts;
+    return this.phase === 'done' && this.continues === 0 && p.penalties === 0 && p.overspeed === 0
+      && this.results.length === this.stops.length
+      && this.results.every((r) => ['START', 'PERFECT', 'GREAT', 'PASSED'].includes(r.rating) && (!r.punct || r.punct === 'ON TIME'));
   }
 
   get score() {
     const p = this.pts;
-    return p.stops + p.punctuality + p.comfort + p.overspeed + p.penalties;
+    return p.stops + p.punctuality + p.comfort + p.overspeed + p.penalties - this.continueCost;
   }
 
   get target() { return this.stops[this.idx] ?? null; }
@@ -115,6 +164,7 @@ export class Run {
         const served = this.idx;
         this.next();
         this.departPending = served;
+        if (this.phase !== 'done') this.checkpoint = this.snapshot();
       }
       return;
     }
@@ -162,7 +212,7 @@ export class Run {
   }
 
   record(r) {
-    const row = { dev: null, punct: null, punctPoints: 0, ...r };
+    const row = { stop: this.idx, dev: null, punct: null, punctPoints: 0, ...r };
     this.results.push(row);
     this.byStop[this.idx] = row;
   }

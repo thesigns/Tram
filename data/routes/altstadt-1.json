@@ -1,0 +1,69 @@
+{
+  "id": "altstadt-1",
+  "name": "Line 1",
+  "city": "Altstadt",
+  "look": "altstadt",
+  "seed": 23,
+  "speed": 40,
+  "startTime": "07:05",
+  "stars": [4000, 8000, 11500],
+  "limits": [
+    { "from": 640, "to": 790, "kmh": 30 }
+  ],
+  "pieces": [
+    { "type": "straight", "length": 110 },
+    { "type": "curve", "radius": 60, "angle": 45, "dir": "left" },
+    { "type": "straight", "length": 160, "grade": 3 },
+    { "type": "curve", "radius": 100, "angle": 30, "dir": "right" },
+    { "type": "straight", "length": 180, "grade": 3 },
+    { "type": "curve", "radius": 45, "angle": 60, "dir": "right" },
+    { "type": "straight", "length": 210 },
+    { "type": "curve", "radius": 80, "angle": 40, "dir": "left" },
+    { "type": "straight", "length": 180, "grade": -3 },
+    { "type": "curve", "radius": 120, "angle": 25, "dir": "right" },
+    { "type": "straight", "length": 190 },
+    { "type": "curve", "radius": 60, "angle": 50, "dir": "left" },
+    { "type": "straight", "length": 190, "grade": 4 },
+    { "type": "curve", "radius": 100, "angle": 20, "dir": "right" },
+    { "type": "straight", "length": 160, "grade": 2 },
+    { "type": "curve", "radius": 25, "angle": 90, "dir": "right" },
+    { "type": "straight", "length": 150 },
+    { "type": "curve", "radius": 25, "angle": 90, "dir": "right" },
+    { "type": "straight", "length": 40 }
+  ],
+  "stops": [
+    { "name": "Hauptbahnhof", "s": 40 },
+    { "name": "Postplatz", "s": 290 },
+    { "name": "Mühlgasse", "s": 520 },
+    { "name": "Kornmarkt", "s": 760 },
+    { "name": "Rathaus", "s": 1010 },
+    { "name": "Am Stadttor", "s": 1225, "request": true },
+    { "name": "Domstraße", "s": 1490 },
+    { "name": "Schlossberg", "s": 1690 },
+    { "name": "Domplatz", "s": 1880 }
+  ],
+  "intersections": [
+    { "s": 200 },
+    { "s": 420, "signal": true },
+    { "s": 920, "signal": true },
+    { "s": 1400 },
+    { "s": 1610, "signal": true }
+  ],
+  "hazards": [
+    { "type": "leftTurn", "s": 420, "chance": 0.6 },
+    { "type": "jaywalker", "s": 680, "chance": 0.8 },
+    { "type": "leftTurn", "s": 920, "chance": 0.7 },
+    { "type": "parked", "s": 1150, "chance": 0.7 },
+    { "type": "cyclist", "s": 1345, "turnAt": 1610, "chance": 0.8 },
+    { "type": "jaywalker", "s": 1708, "chance": 0.6 }
+  ],
+  "squares": [
+    { "from": 690, "to": 805, "side": "right" },
+    { "from": 1765, "to": 1908, "side": "left" }
+  ],
+  "landmarks": [
+    { "type": "market", "from": 690, "to": 805, "side": "right" },
+    { "type": "gate", "s": 1262 },
+    { "type": "cathedral", "s": 1838, "off": -18 }
+  ]
+}

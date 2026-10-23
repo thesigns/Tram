@@ -79,3 +79,4 @@ export class MeshBuilder {
 }
 
 export const flatMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+flatMaterial.userData.shared = true;   // used by every world and the cab: never disposed

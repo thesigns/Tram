@@ -1,5 +1,7 @@
 import { clamp } from '../core/utils.js';
 
+const _a = {};
+
 // Track centreline built from "turtle" pieces (GDD §14.2): straights and circular curves, optionally on a grade.
 // Sampled into an arc-length table, so s → position / heading / curvature / grade is a cheap lookup.
 // Heading 0 = forward along −Z, positive curvature turns right. Lateral offset > 0 = right of the track,
@@ -53,6 +55,12 @@ export class Track {
     }
     this._i = lo;
     return lo;
+  }
+
+  // Average grade between s0 and s1 – under the tram body it changes smoothly where pieces meet.
+  slope(s0, s1) {
+    const a = this.at(s0, 0, _a).y, b = this.at(s1, 0, _a).y;
+    return s1 > s0 ? (b - a) / (s1 - s0) : 0;
   }
 
   // Position on the track at distance t, `off` meters to the right of the centreline.
