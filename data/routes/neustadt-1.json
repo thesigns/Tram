@@ -1,0 +1,62 @@
+{
+  "id": "neustadt-1",
+  "name": "Line 9",
+  "city": "Neustadt",
+  "look": "neustadt",
+  "seed": 57,
+  "speed": 60,
+  "startTime": "09:10",
+  "double": true,
+  "pieces": [
+    { "type": "straight", "length": 520 },
+    { "type": "curve", "radius": 300, "angle": 20, "dir": "right" },
+    { "type": "straight", "length": 600 },
+    { "type": "curve", "radius": 250, "angle": 25, "dir": "left" },
+    { "type": "straight", "length": 266 },
+    { "type": "curve", "radius": 30, "angle": 90, "dir": "left" },
+    { "type": "straight", "length": 300 },
+    { "type": "curve", "radius": 120, "angle": 45, "dir": "right" },
+    { "type": "straight", "length": 240 }
+  ],
+  "stops": [
+    { "name": "Westbahnhof", "s": 40 },
+    { "name": "Messe", "s": 380 },
+    { "name": "Universität", "s": 760 },
+    { "name": "Sternplatz", "s": 1200 },
+    { "name": "Neue Mitte", "s": 1450 },
+    { "name": "Parkallee", "s": 1800, "request": true },
+    { "name": "Stadion", "s": 2250 }
+  ],
+  "intersections": [
+    { "s": 200, "signal": true },
+    { "s": 490 },
+    { "s": 870, "signal": true },
+    { "s": 1720, "signal": true }
+  ],
+  "hazards": [
+    { "type": "leftTurn", "s": 200, "lane": -8.6, "chance": 0.5 },
+    { "type": "leftTurn", "s": 870, "lane": -8.6, "chance": 0.6 },
+    { "type": "jaywalker", "s": 930, "chance": 0.7 },
+    { "type": "jaywalker", "s": 1530, "chance": 0.6 },
+    { "type": "leftTurn", "s": 1720, "lane": -8.6, "chance": 0.6 },
+    { "type": "jaywalker", "s": 2110, "chance": 0.5 }
+  ],
+  "junctions": [
+    { "s": 470, "way": "straight", "branch": "right", "pieces": [
+      { "type": "curve", "radius": 20, "angle": 90, "dir": "right" },
+      { "type": "straight", "length": 40 }
+    ] },
+    { "s": 1599, "way": "left", "branch": "straight", "pieces": [
+      { "type": "straight", "length": 110 }
+    ] }
+  ],
+  "single": [
+    { "from": 1005, "to": 1135 }
+  ],
+  "roundabout": { "s": 1070, "radius": 46 },
+  "squares": [
+    { "from": 1020, "to": 1120, "side": "left" },
+    { "from": 1020, "to": 1120, "side": "right" },
+    { "from": 1760, "to": 1880, "side": "left" }
+  ]
+}

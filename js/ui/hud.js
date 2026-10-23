@@ -1,4 +1,4 @@
-import { LIMITS, PASSENGERS, STOPS, TIMETABLE } from '../config.js';
+import { JUNCTION, LIMITS, PASSENGERS, STOPS, TIMETABLE } from '../config.js';
 import { clamp, formatClock, formatDelta } from '../core/utils.js';
 
 const FONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
@@ -8,9 +8,10 @@ const RED = '#ff5a46';
 const AMBER = '#f2c230';
 const GREEN = '#9fe05e';
 const BLUE = '#62c4ff';
-const HAZARD_TEXT = { car: 'CAR ON THE TRACK', van: 'OBSTRUCTION', ped: 'PEDESTRIAN', bike: 'CYCLIST AHEAD', lift: 'FORKLIFT' };
+const ARROW = { left: '◄', straight: '▲', right: '►' };
+const HAZARD_TEXT = { car: 'CAR ON THE TRACK', van: 'OBSTRUCTION', ped: 'PEDESTRIAN', bike: 'CYCLIST AHEAD', lift: 'FORKLIFT', tram: 'TRAM AHEAD' };
 export const RATING_COLORS = {
-  PERFECT: '#5ee08a', GREAT: GREEN, GOOD: AMBER, OK: '#f0a050', MISSED: RED, PASSED: GREEN, EMPTY: '#b8c0c8',
+  PERFECT: '#5ee08a', GREAT: GREEN, GOOD: AMBER, OK: '#f0a050', MISSED: RED, PASSED: GREEN,
 };
 
 // Precision bar range: 20 m before the marker … 6 m past it, with a square-root scale so the last meters are wide.
@@ -128,12 +129,17 @@ export class Hud {
 
     // prompts, most urgent first
     let prompt = null, color = INK;
+    const points = run.street.nextJunction(tram.s);
     const standing = tram.stopped && run.phase === 'drive' && run.departPending !== null;
     if (tram.interlocked) { prompt = blink ? 'DOORS OPEN – NO TRACTION' : ''; color = RED; }
     else if (run.curve && tram.v > run.curve.safe) { prompt = blink ? 'TOO FAST FOR THE CURVE!' : ''; color = RED; }
     else if (tram.slide) { prompt = blink ? 'WHEELS SLIDING – EASE THE BRAKE' : ''; color = RED; }
     else if (tram.slip) { prompt = blink ? 'WHEELS SLIPPING – LESS POWER' : ''; color = RED; }
     else if (run.overspeed > LIMITS.tolerance) { prompt = blink ? 'TOO FAST – THE TRAM IS SHAKING' : ''; color = RED; }
+    else if (points && points.target !== points.way && points.s - tram.s < JUNCTION.warn) {
+      prompt = blink ? `POINTS SET WRONG – TAP ${ARROW[points.way]}` : '';
+      color = AMBER;
+    }
     else if (run.phase === 'board') prompt = run.terminus ? 'Passengers are getting off…' : 'Boarding…';
     else if (run.phase === 'ready') {
       prompt = run.countdown > 0 ? `Close the doors · departure in ${formatDelta(run.countdown).replace('+', '')}` : 'Close the doors and depart';
@@ -203,7 +209,7 @@ export class Hud {
     c.restore();
     const color = sig.aspect === 'stop' ? RED : sig.aspect === 'prepare' ? AMBER : DIM;
     this.text(`${Math.round(sig.dist)} m`, x, y + 41, 13, color, 'center', 600);
-    if (sig.bridge) this.text('BRIDGE', x, y + 55, 11, DIM, 'center', 600);
+    if (sig.label) this.text(sig.label, x, y + 55, 11, DIM, 'center', 600);
   }
 
   // A small "!" above a hazard in the street; it grows as the tram gets closer.

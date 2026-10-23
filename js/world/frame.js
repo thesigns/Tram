@@ -26,6 +26,19 @@ export function ribbon(b, track, s0, s1, offA, offB, y, color, facing = UP, step
   }
 }
 
+// Horizontal strip between two offsets that change along the track: fa(s), fb(s).
+export function band(b, track, s0, s1, fa, fb, y, color, facing = UP, step = 2) {
+  const n = Math.max(1, Math.ceil((s1 - s0) / step));
+  let a0 = pt(track, s0, fa(s0), y), b0 = pt(track, s0, fb(s0), y);
+  for (let i = 1; i <= n; i++) {
+    const s = s0 + ((s1 - s0) * i) / n;
+    const a1 = pt(track, s, fa(s), y), b1 = pt(track, s, fb(s), y);
+    b.quad(a0, b0, b1, a1, color, facing);
+    a0 = a1;
+    b0 = b1;
+  }
+}
+
 // Vertical strip at a lateral offset; face = +1 faces right, −1 faces left.
 export function wall(b, track, s0, s1, off, y0, y1, color, face, step = 2) {
   const n = Math.max(1, Math.ceil((s1 - s0) / step));

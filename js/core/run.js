@@ -1,4 +1,5 @@
-import { COMFORT, LIMITS, LOOKS, PASSENGERS, PHYSICS, STOPS, STREET, TIMETABLE } from '../config.js';
+import { LIMITS, LOOKS, PASSENGERS, PHYSICS, STOPS, STREET, TIMETABLE } from '../config.js';
+import { EB } from './tram.js';
 import { Comfort } from './comfort.js';
 import { Crowd } from './crowd.js';
 import { Street } from './street.js';
@@ -10,7 +11,7 @@ import { clamp, mulberry32 } from './utils.js';
 // stop is the terminus. The score is the passengers' satisfaction at the end of the line (js/core/crowd.js);
 // an accident ends the run.
 // Events go out through emit(type, data): rating, missed, skipped, request, notice, board, arrive, ready,
-// departure, arrival, bump, fail, done, hint, bridge.
+// departure, arrival, bump, fail, done, hint, bridge, points, trip.
 export class Run {
   constructor(route, tramCfg, track, limits, emit) {
     this.tramCfg = tramCfg;
@@ -63,6 +64,7 @@ export class Run {
     this.stopRequested = false;
     this.shift = 0;             // the timetable moved by an excused bridge lift [game s]
     this.bridgeDelta = 0;       // the delay when the bridge warning started
+    this.lastNotch = 0;
     this.comfort.reset();
 
     const rnd = mulberry32(seed);
@@ -126,6 +128,11 @@ export class Run {
     return this.tramCfg.doors.every((d) => s - d - m >= stop.start && s - d + m <= stop.end);
   }
 
+  // An emergency stop throws the riders forward: the faster, the angrier (the comfort falls too).
+  emergencyStop(v) {
+    if (v > 0) this.upsetRiders(PASSENGERS.emergency * (v * 3.6) / 50, 'emergency');
+  }
+
   // Anger for everybody aboard.
   upsetRiders(amount, cause) {
     for (const p of this.crowd.riders) this.crowd.upset(p, amount, cause);
@@ -154,6 +161,12 @@ export class Run {
     }
   }
 
+  // The points ahead (◄ ▲ ►): set them, if there are any within reach.
+  setPoints(dir, tram) {
+    const j = this.over ? null : this.street.nextJunction(tram.s);
+    if (j?.throw(dir, tram)) this.emit('points', { junction: j, dir });
+  }
+
   // The bell: hazards ahead react (GDD §4.1); ringing in quick succession upsets the passengers.
   bell(tram) {
     if (this.over) return;
@@ -168,13 +181,7 @@ export class Run {
     const error = s - st.s;
     this.phase = 'board';
     this.boardTimer = 0;
-    if (!this.needed(st)) {
-      // an empty request stop: no harm done, but time lost
-      this.record(i, { rating: 'EMPTY', error });
-      this.emit('rating', { stop: i, rating: 'EMPTY', error, off: 0 });
-      this.alightWait = 0;
-      return;
-    }
+    // stopping is always right, also at a request stop nobody needed
     const r = STOPS.ratings.find((x) => Math.abs(error) <= x.max);
     const rating = r ? r.name : 'OK';
     const off = this.terminus ? this.crowd.riders : this.crowd.ridersTo(i);
@@ -229,6 +236,13 @@ export class Run {
       this.emit('notice', { text: d.signal === this.street.bridge ? 'Passed the bridge signal' : 'Passed a stop signal', bad: true });
     }
     if (type === 'fall') this.failRun(tram, 'bridge');
+    if (type === 'trip') {
+      // train protection: the emergency brake, until the tram stands before the points
+      tram.trip = true;
+      this.comfort.hit(this.comfort.emergency(tram.v));
+      this.emergencyStop(tram.v);
+      this.emit('trip', {});
+    }
     if (type === 'bridge') {
       if (d.phase === 'warning') this.bridgeDelta = this.sched - this.timetable.at(tram.s);
       if (d.phase === 'cleared') {
@@ -266,12 +280,14 @@ export class Run {
     this.curve = this.limits.curveAt(tram.s);
     this.lateral = this.curve ? (v * v) / this.curve.radius : 0;
     const over = this.overspeed - LIMITS.tolerance;
-    this.rough = clamp(Math.max(0, over) / 20 + Math.max(0, this.lateral - COMFORT.lateralFree) / 2, 0, 1);
+    this.rough = clamp(Math.max(0, over) / 20 + Math.max(0, this.lateral - LIMITS.aLat) / 2, 0, 1);
 
     // the street: signals, traffic, hazards, collisions
     this.street.update(dt, tram, this.prevS);
     this.prevS = tram.s;
     if (this.over) return;
+    if (tram.notch === EB && this.lastNotch !== EB) this.emergencyStop(v);
+    this.lastNotch = tram.notch;
     this.comfort.update(dt, tram, this.lateral, over);
     this.crowd.update(dt, this.sched, this.timetable, this.comfort.value);
     for (const p of this.crowd.arrivals(this.sched)) this.emit('arrive', { person: p });

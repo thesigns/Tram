@@ -20,6 +20,8 @@ export class Input {
     this.onDoors = null;
     this.onBell = null;
     this.onPause = null;
+    this.onPoints = null;       // (dir) – left | straight | right
+    this.onPointsStep = null;   // (−1 | +1) – keyboard: one position left or right
 
     this.lever = document.getElementById('lever');
     this.handle = this.lever.querySelector('.handle');
@@ -36,6 +38,7 @@ export class Input {
     this.bindLever();
     this.bindButton('doors-btn', () => this.onDoors?.());
     this.bindButton('bell-btn', () => this.onBell?.());
+    for (const btn of document.querySelectorAll('#points [data-dir]')) this.bindButton(btn, () => this.onPoints?.(btn.dataset.dir));
     document.getElementById('pause-btn').addEventListener('pointerdown', (e) => { e.stopPropagation(); this.onPause?.(); });
     this.bindKeyboard();
     window.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -112,7 +115,7 @@ export class Input {
   }
 
   bindButton(id, fn) {
-    const el = document.getElementById(id);
+    const el = typeof id === 'string' ? document.getElementById(id) : id;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (!this.enabled) return;
@@ -138,6 +141,8 @@ export class Input {
         case 'Space': this.setNotch(EB); break;
         case 'KeyE': this.onDoors?.(); break;
         case 'KeyB': this.onBell?.(); break;
+        case 'KeyA': case 'ArrowLeft': this.onPointsStep?.(-1); break;
+        case 'KeyD': case 'ArrowRight': this.onPointsStep?.(1); break;
         default:
       }
     });

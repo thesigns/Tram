@@ -34,7 +34,8 @@ export const COMFORT = {
   lateralFree: 0.7,     // lateral acceleration passengers don't mind [m/s²] (= LIMITS.aLat)
   lateral: 25,          // comfort lost per second per m/s² of lateral acceleration above that (a curve too fast)
   overspeed: 0.6,       // per second per km/h over the limit + tolerance: the tram shakes (less than in a curve)
-  emergency: 10,        // pulling the emergency brake
+  emergency: 10,        // pulling the emergency brake …
+  emergencyKmh: 0.8,    // … plus this per km/h it was pulled at
   recover: 8,           // per second of smooth riding
 };
 
@@ -57,6 +58,7 @@ export const PASSENGERS = {
   signal: 0.12,         // the riders, when the tram passes a stop signal
   doorsAway: 0.05,      // the riders, when the doors open away from a platform
   bump: 0.4,            // the riders, in a minor collision
+  emergency: 0.2,       // the riders, an emergency stop from 50 km/h (in proportion to the speed)
   points: 100,          // score per passenger, times their satisfaction
   perfect: 0.05,        // the perfect-run badge: everybody delivered, nobody angrier than this
   stars: [0.6, 0.75, 0.9],   // average satisfaction for 1–3 stars
@@ -71,6 +73,7 @@ export const TIMETABLE = {
   refMargin: 2,         // the reference profile stays this far under the limit [km/h]
   reaction: 2,          // reference dwell: the driver's reactions on top of doors and boarding [s]
   signalAllowance: 2,   // per tram signal on the way [real s]
+  singleAllowance: 8,   // per single-track section: waiting for the tram the other way [real s]
   round: 15,            // departures are rounded up to this [game s]
   earlyTolerance: 5,    // on time = from 0:05 early …
   lateTolerance: 30,    // … to 0:30 late [game s]
@@ -156,6 +159,28 @@ export const BRIDGE = {
   angle: 72,              // the leaves fully open [deg]
 };
 
+// Points (GDD §4.1): the driver sets them with ◄ ▲ ►. Points set against the line trip the emergency brake
+// just before them (train protection), so the tram never takes a wrong turn – it only loses time.
+export const JUNCTION = {
+  throw: 1.5,             // moving the points [s]
+  show: 250,              // the points buttons appear this far ahead [m]
+  warn: 160,              // the HUD warns about points set wrong this far ahead [m]
+  set: 0.5,               // chance that the points already lie the line's way
+};
+
+// A single-track section (GDD §7): the tram the other way comes through around the time a punctual tram
+// reaches the section, so there is usually a short wait at its signal. Distances in m, times in real s.
+export const SINGLE = {
+  gap: 3.2,               // the other track, left of ours on a double-track line
+  merge: 25,              // the tracks merge over this
+  speed: 12,              // the other tram [m/s]
+  approach: 300,          // it appears this far beyond its stop line
+  early: -14,             // it reaches its stop line this much before …
+  late: 2,                // … to this much after a punctual tram reaches ours
+  reserve: 3,             // the section is kept for it from this long before it arrives
+  length: 15,
+};
+
 export const CITY = {
   chunk: 100,             // street geometry is merged per chunk of this length
   drawAhead: 650,
@@ -212,6 +237,27 @@ export const LOOKS = {
     sky: 0x6a8aa8,
     fog: 0xb9c6cd,
     sea: 0x4f7180,
+  },
+  // the new town: a wide boulevard, the double track on grass in the middle, tall bright blocks
+  neustadt: {
+    roadHalf: 12,
+    facade: 15,
+    road: '#4a4d50',
+    trackbed: '#5d7a45',
+    sidewalk: '#b8b3a8',
+    curb: '#9a958b',
+    dashes: true,
+    lanes: [-8.6, 6.9],   // lane dashes, one each side of the reserved track
+    reserved: [-5, 1.8],  // the grass strip with both tracks
+    grass: '#6f8f50',
+    poles: 'center',      // catenary poles between the tracks
+    floors: [5, 9],
+    roofs: 0,
+    palette: ['#e8e4da', '#c9d6df', '#f0c987', '#9fb8c9', '#d98e73', '#b8d0b2', '#eaeaea', '#d6c3a5', '#a9b7c6'],
+    roofColors: ['#8a8f94'],
+    sky: 0x5f94d0,
+    fog: 0xd0dce4,
+    ground: 0x86a066,
   },
 };
 

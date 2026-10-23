@@ -13,7 +13,7 @@ const WATCH = {
   bike: ['wait', 'ride'],
   lift: ['wait', 'cross'],
 };
-const FIXED = { van: '#eeeae0', lift: '#e3a51e' };   // liveries that don't come from a palette
+const FIXED = { van: '#eeeae0', lift: '#e3a51e', tram: '#e9e2cf' };   // liveries that don't come from a palette
 
 // Models face −Z (forward), like the camera.
 function carParts() {
@@ -69,6 +69,23 @@ function liftParts() {
   return { body: new THREE.BoxGeometry(1.2, 1, 1.7).translate(0, 0.8, 0.45), details: d.build() };
 }
 
+// A tram the other way (a single-track section): cream with a red skirt, a window band, a pantograph.
+function tramParts() {
+  const d = new MeshBuilder();
+  for (const x of [-1.21, 1.21]) {
+    d.box(0.04, 0.95, 13.4, GLASS, [x, 2.05, 0]);
+    d.box(0.05, 0.55, 14.6, '#c8382c', [x, 0.75, 0]);
+  }
+  for (const z of [-7.51, 7.51]) {
+    d.box(2.1, 1.05, 0.04, GLASS, [0, 2.1, z]);
+    for (const x of [-0.75, 0.75]) d.box(0.28, 0.16, 0.05, z < 0 ? '#f4f1e0' : '#b02020', [x, 0.9, z]);
+  }
+  d.box(1.2, 0.25, 1.6, '#5a5e61', [0, 3.33, 0]);
+  d.box(0.06, 0.9, 0.06, DARK, [0, 3.8, 0.4], [0.6, 0, 0]);
+  d.box(1.4, 0.05, 0.12, DARK, [0, 4.2, 0.1]);
+  return { body: new THREE.BoxGeometry(2.4, 2.9, 15).translate(0, 1.75, 0), details: d.build(), len: 15, wid: 2.4 };
+}
+
 // Blinkers: one mesh per side (front + rear lamp merged).
 function blinkerGeo(len, wid, y, side) {
   const b = new MeshBuilder();
@@ -102,7 +119,7 @@ export class TrafficView {
     this.street = street;
     this.group = new THREE.Group();
     scene.add(this.group);
-    const parts = { car: carParts(), van: vanParts(), ped: pedParts(), bike: bikeParts(), lift: liftParts() };
+    const parts = { car: carParts(), van: vanParts(), ped: pedParts(), bike: bikeParts(), lift: liftParts(), tram: tramParts() };
     this.views = street.agents.map((a) => {
       const p = parts[a.kind];
       const root = new THREE.Group();

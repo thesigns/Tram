@@ -37,6 +37,7 @@ export class Tram {
     this.halted = false;  // the run has ended (a crash): grind to a halt
     this.slide = false;   // the brake asks for more than the rail can give (GDD §5 adhesion)
     this.slip = false;    // … or the power does
+    this.trip = false;    // train protection: the emergency brake until the tram stands
   }
 
   get stopped() { return this.v === 0; }
@@ -58,8 +59,10 @@ export class Tram {
     // traction and brake effort build up gradually – jumping notches is felt as jerk, not hidden
     let tracTarget = n > 0 && this.doorsClosed ? n / 4 : 0;
     let brakeTarget = n === EB ? BRAKE.emergency : n < 0 ? BRAKE.service[-n - 1] : 0;
+    if (this.trip) { tracTarget = 0; brakeTarget = BRAKE.emergency; }
     if (this.halted) { tracTarget = 0; brakeTarget = P.haltDecel; }
-    const tau = n === EB || this.halted ? P.ebTau : P.effortTau;
+    const emergency = n === EB || this.halted || this.trip;
+    const tau = emergency ? P.ebTau : P.effortTau;
     const k = 1 - Math.exp(-dt / tau);
     this.traction += (tracTarget - this.traction) * k;
     this.brake += (brakeTarget - this.brake) * k;
@@ -67,7 +70,7 @@ export class Tram {
     const v = this.v;
     // asking for more than the grip slides or slips the wheels; the emergency brake works anyway
     const full = tractionAccel(cfg, v);
-    this.slide = n !== EB && !this.halted && brakeTarget > grip && v > 0;
+    this.slide = !emergency && brakeTarget > grip && v > 0;
     this.slip = tracTarget * full > grip;
     const brake = this.slide ? Math.min(this.brake, grip * P.slideFactor) : this.brake;
     const aTraction = this.slip ? Math.min(this.traction * full, grip * P.slideFactor) : this.traction * full;
@@ -94,6 +97,7 @@ export class Tram {
       this.s += (v + v2) * 0.5 * dt;
     }
     this.v = v2;
+    if (v2 === 0) this.trip = false;
 
     // the change of acceleration drives the comfort meter; jerk is lightly smoothed for ?debug
     this.da = a - this.a;

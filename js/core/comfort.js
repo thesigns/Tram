@@ -20,6 +20,9 @@ export class Comfort {
 
   get average() { return this.time > 0 ? this.sum / this.time : this.value; }
 
+  // An emergency stop: the faster, the worse.
+  emergency(v) { return v > 0 ? COMFORT.emergency + COMFORT.emergencyKmh * v * 3.6 : 0; }
+
   hit(points) {
     this.value = Math.max(0, this.value - points);
     this.recent += points;
@@ -31,7 +34,7 @@ export class Comfort {
     let loss = C.jerk * Math.max(0, Math.abs(tram.da) - C.jerkFree * dt);
     loss += C.lateral * Math.max(0, lateral - C.lateralFree) * dt;
     loss += C.overspeed * Math.max(0, over) * dt;
-    if (tram.notch === EB && this.lastNotch !== EB) loss += C.emergency;
+    if (tram.notch === EB && this.lastNotch !== EB) loss += this.emergency(tram.v);
     this.lastNotch = tram.notch;
     if (loss > 0) this.hit(loss);
     else this.value = Math.min(100, this.value + C.recover * dt);

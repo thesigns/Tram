@@ -4,7 +4,8 @@ import { MeshBuilder, flatMaterial } from '../models/builder.js';
 import { mulberry32 } from '../core/utils.js';
 import { block, groundLevel, ribbon, strip, tbox, vcyl, wall } from './frame.js';
 
-// What the street leaves out (GDD §8): tunnels under the hills and the lifting bridge. Tunnel interiors
+// What the street leaves out (GDD §8): tunnels under the hills, the lifting bridge, a roundabout on a
+// flyover, and the points indicators at junctions. Tunnel interiors
 // are unlit, so they stay dark whatever the sun does, with glowing lamps; main.js darkens the fog and the
 // cab inside (darkness). The bridge leaves, barriers, warning lights and the passing boat follow the
 // simulation (the Bridge in js/core/street.js).
@@ -199,6 +200,123 @@ class BridgeView {
   }
 }
 
+
+// ---------- a roundabout on a flyover ----------
+
+const CARS = ['#c8382c', '#2f5d8c', '#e8e4da', '#3a3d40', '#d9a23a', '#5a6b7a'];
+
+// A round deck on pillars over the boulevard with a ring road, an island and an obelisk; cars go round
+// on top. Under it the tram runs on a single track between two walls that carry the deck.
+class Roundabout {
+  constructor(group, track, look, def) {
+    const c = track.at(def.s, 0, {});
+    const R = def.radius, top = 8, deck = 1.2, base = look.base;
+    const b = new MeshBuilder();
+    b.add(new THREE.CylinderGeometry(R, R, deck, 40), '#a19d96', [c.x, c.y + top - deck / 2, c.z]);
+    b.add(new THREE.CylinderGeometry(R - 0.6, R - 0.6, 0.06, 40), '#4a4d50', [c.x, c.y + top + 0.03, c.z]);
+    b.add(new THREE.CylinderGeometry(R * 0.44, R * 0.46, 0.5, 32), '#c8c2b6', [c.x, c.y + top + 0.25, c.z]);
+    b.add(new THREE.CylinderGeometry(R * 0.42, R * 0.42, 0.56, 32), '#6f8f50', [c.x, c.y + top + 0.28, c.z]);
+    b.add(new THREE.CylinderGeometry(0.5, 1.4, 16, 4), '#ddd6c6', [c.x, c.y + top + 8.5, c.z], [0, Math.PI / 4, 0]);
+    b.add(new THREE.CylinderGeometry(0, 0.55, 1.6, 4), '#c9a227', [c.x, c.y + top + 17.3, c.z], [0, Math.PI / 4, 0]);
+    for (let i = 0; i < 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      b.box(0.1, 1, 0.1, WHITE, [c.x + Math.cos(a) * (R - 0.25), c.y + top + 0.5, c.z + Math.sin(a) * (R - 0.25)]);
+    }
+    b.add(new THREE.CylinderGeometry(R - 0.25, R - 0.25, 0.1, 48, 1, true), WHITE, [c.x, c.y + top + 1.02, c.z]);
+    // pillars, clear of the street underneath
+    const right = { x: Math.cos(c.h), z: Math.sin(c.h) };
+    for (const [r, n] of [[R * 0.82, 16], [R * 0.45, 8]]) {
+      for (let i = 0; i < n; i++) {
+        const a = ((i + 0.5) / n) * Math.PI * 2, x = c.x + Math.cos(a) * r, z = c.z + Math.sin(a) * r;
+        if (Math.abs((x - c.x) * right.x + (z - c.z) * right.z) < look.roadHalf + 1.5) continue;
+        b.add(new THREE.CylinderGeometry(0.9, 0.9, top - deck - base + c.y, 10), '#a19d96', [x, (base + c.y + top - deck) / 2, z]);
+      }
+    }
+    // the walls beside the single track that carry the deck
+    for (const o of [-2.5, 2.5]) tbox(b, track, def.s, o, (top - deck) / 2, 0.6, top - deck, R * 1.9, '#9a968f');
+    group.add(new THREE.Mesh(b.build(), flatMaterial));
+
+    // cars going round on the ring road
+    const cars = new MeshBuilder();
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2 + (i % 3) * 0.2, r = R * 0.68 + (i % 2) * 3.2;
+      const col = CARS[i % CARS.length];
+      cars.box(1.8, 0.75, 4.2, col, [Math.cos(a) * r, 0.6, Math.sin(a) * r], [0, -a, 0]);
+      cars.box(1.6, 0.55, 2.1, '#2b3238', [Math.cos(a) * r, 1.2, Math.sin(a) * r], [0, -a, 0]);
+    }
+    this.cars = new THREE.Mesh(cars.build(), flatMaterial);
+    this.cars.position.set(c.x, c.y + top + 0.06, c.z);
+    group.add(this.cars);
+  }
+
+  update(time) { this.cars.rotation.y = -time * 0.16; }
+}
+
+// ---------- points indicators ----------
+
+const ARROWS = ['left', 'straight', 'right'];
+
+function arrowTexture(dir, lit) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#0d0d0d';
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = lit ? '#fffbe8' : '#2c2c2c';
+  g.translate(32, 32);
+  g.rotate(dir === 'left' ? -Math.PI / 4 : dir === 'right' ? Math.PI / 4 : 0);
+  g.beginPath();
+  g.moveTo(0, -24);
+  g.lineTo(13, -8);
+  g.lineTo(5, -8);
+  g.lineTo(5, 22);
+  g.lineTo(-5, 22);
+  g.lineTo(-5, -8);
+  g.lineTo(-13, -8);
+  g.closePath();
+  g.fill();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Before each junction, the arrow the points lie (◄ ▲ ►), blinking while they move. The lit arrows sit
+// just in front of the dark ones and are shown or hidden.
+class PointsSigns {
+  constructor(group, track, junctions) {
+    const b = new MeshBuilder(), plane = new THREE.PlaneGeometry(0.34, 0.34);
+    const dark = ARROWS.map((d) => new THREE.MeshBasicMaterial({ map: arrowTexture(d, false) }));
+    const lit = ARROWS.map((d) => new THREE.MeshBasicMaterial({ map: arrowTexture(d, true) }));
+    this.signs = junctions.map((j) => {
+      const s = j.s - 10, off = 2.4;
+      const p = track.at(s, off, {});
+      b.add(new THREE.CylinderGeometry(0.06, 0.07, 3, 6), '#3a3f3c', [p.x, p.y + 1.5, p.z]);
+      b.box(1.2, 0.48, 0.18, '#151515', [p.x + Math.sin(p.h) * 0.1, p.y + 3.1, p.z - Math.cos(p.h) * 0.1], [0, -p.h, 0]);
+      const lamps = {};
+      ARROWS.forEach((d, i) => {
+        const q = track.at(s, off + (i - 1) * 0.38, {});
+        for (const [k, mats, dz] of [['dark', dark, 0.01], ['lit', lit, 0.02]]) {
+          const m = new THREE.Mesh(plane, mats[i]);
+          m.position.set(q.x - Math.sin(q.h) * dz, q.y + 3.1, q.z + Math.cos(q.h) * dz);
+          m.rotation.y = -q.h;
+          group.add(m);
+          if (k === 'lit') { m.visible = false; lamps[d] = m; }
+        }
+      });
+      return lamps;
+    });
+    group.add(new THREE.Mesh(b.build(), flatMaterial));
+  }
+
+  update(junctions, time) {
+    const blink = Math.floor(time / 0.3) % 2 === 0;
+    junctions.forEach((j, i) => {
+      const show = j.moving ? (blink ? j.target : null) : j.pos;
+      for (const d of ARROWS) this.signs[i][d].visible = d === show;
+    });
+  }
+}
+
 export function createStructures(track, route) {
   const look = { ...LOOKS[route.look ?? 'modern'], base: groundLevel(track, route) };
   const group = new THREE.Group();
@@ -206,11 +324,15 @@ export function createStructures(track, route) {
   const rnd = mulberry32((route.seed ?? 1) * 7 + 3);
   for (const t of tunnels) tunnel(group, track, look, t, rnd);
   const bridge = route.bridge ? new BridgeView(group, track, look, route.bridge, route.sea ?? look.base) : null;
+  const roundabout = route.roundabout ? new Roundabout(group, track, look, route.roundabout) : null;
+  const points = route.junctions?.length ? new PointsSigns(group, track, route.junctions) : null;
   const fade = CITY.tunnel.fade;
   return {
     group,
     update(street, time) {
       if (bridge && street.bridge) bridge.update(street.bridge, time);
+      roundabout?.update(time);
+      points?.update(street.junctions, time);
     },
     // Does a tunnel hide something at s from a driver at from? (A portal ahead, or the far end of a
     // curving tunnel – the exit is in sight only near it.)

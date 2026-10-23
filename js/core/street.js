@@ -1,4 +1,5 @@
-import { BRIDGE, PHYSICS, STREET, TIMETABLE } from '../config.js';
+import { BRAKE, BRIDGE, JUNCTION, PHYSICS, SINGLE, STREET, TIMETABLE } from '../config.js';
+import { otherTrack } from '../world/track.js';
 import { mulberry32 } from './utils.js';
 
 const { PI } = Math;
@@ -36,6 +37,7 @@ function extents(a) {
 class LeftTurn {
   constructor(def, st) {
     this.def = def;
+    this.lane = def.lane ?? -2.7;  // the oncoming lane (further out on a boulevard)
     this.agent = st.add(agent('car', 4.3, 1.8));
     this.conflict = def.s - 3.5;   // the tram front has to stop before this
   }
@@ -55,7 +57,7 @@ class LeftTurn {
     if (!this.active) return;
     switch (c.state) {
       case 'idle':
-        if (s0 - tram.s < 330) Object.assign(c, { state: 'approach', visible: true, s: s0 + 75, off: -2.7, dir: PI, speed: 9, blink: 'left' });
+        if (s0 - tram.s < 330) Object.assign(c, { state: 'approach', visible: true, s: s0 + 75, off: this.lane, dir: PI, speed: 9, blink: 'left' });
         break;
       case 'approach': {
         const left = c.s - (s0 + 4);
@@ -78,7 +80,7 @@ class LeftTurn {
         c.speed = Math.min(5, c.speed + 2.5 * dt);
         this.phi = Math.min(PI / 2, this.phi + (c.speed * dt) / R);
         c.s = s0 + 4 - R * Math.sin(this.phi);
-        c.off = -2.7 + R - R * Math.cos(this.phi);
+        c.off = this.lane + R - R * Math.cos(this.phi);
         c.dir = Math.atan2(Math.sin(this.phi), -Math.cos(this.phi));
         if (this.phi >= PI / 2) { c.state = 'exit'; c.blink = null; }
         break;
@@ -139,10 +141,11 @@ class Jaywalker {
       case 'wait': {
         const passed = tram.s - st.length > p.s + 1;
         if (this.patient && !passed) break;
-        const dist = p.s - 0.5 - tram.s;
+        // judged for the moment they would reach the tracks (a wide street is a long walk)
         const lead = (this.kerb - STREET.envelope) / WALK;
-        if (passed || dist <= commitDist(tram.v, st) + tram.v * lead * 0.6) {
-          if (passed || dist >= fairDist(tram.v, st)) { p.state = 'walk'; p.speed = WALK; } else this.patient = true;
+        const atTracks = p.s - 0.5 - tram.s - tram.v * lead;
+        if (passed || atTracks <= commitDist(tram.v, st)) {
+          if (passed || atTracks >= fairDist(tram.v, st) * 1.1) { p.state = 'walk'; p.speed = WALK; } else this.patient = true;
         }
         break;
       }
@@ -370,6 +373,7 @@ class Bridge {
     this.s1 = def.s + def.length;
     this.line = def.s - STREET.stopLineBack;
     this.s = def.s;   // like a Signal (the HUD, the signal head)
+    this.label = 'BRIDGE';
   }
 
   aspect() {
@@ -441,6 +445,136 @@ class Bridge {
     const up = this.state === 'lift' ? this.timer : this.state === 'open' ? B.lift + this.timer
       : this.state === 'lower' ? B.lift + B.open + this.timer : -1;
     this.boat = up >= 0 ? up / (2 * B.lift + B.open) : null;
+  }
+}
+
+// Points (GDD §4.1) where a branch leaves the line: the line goes `way`, the branch `branch` (left |
+// straight | right). They lie either way at first; the driver sets them, which takes JUNCTION.throw and
+// is only possible before the tram reaches them. Points not set for the line trip the emergency brake
+// where it still stops the tram before them (train protection) – never a wrong turn, only lost time.
+class Junction {
+  constructor(def) {
+    this.def = def;
+    this.s = def.s;
+    this.way = def.way ?? 'straight';
+    this.branch = def.branch;
+  }
+
+  reset(rnd) {
+    this.pos = rnd() < (this.def.set ?? JUNCTION.set) ? this.way : this.branch;
+    this.target = this.pos;
+    this.timer = 0;
+    this.tripped = false;
+  }
+
+  get moving() { return this.timer > 0; }
+  // set for the line, and not moving
+  get right() { return this.pos === this.way && !this.moving; }
+  can(dir) { return dir === this.way || dir === this.branch; }
+
+  throw(dir, tram) {
+    if (tram.s >= this.s || !this.can(dir) || dir === this.target) return false;
+    this.target = dir;
+    this.timer = JUNCTION.throw;
+    return true;
+  }
+
+  update(dt, tram, st) {
+    if (this.timer > 0) {
+      this.timer = Math.max(0, this.timer - dt);
+      if (this.timer === 0) this.pos = this.target;
+    }
+    if (tram.stopped) this.tripped = false;
+    if (this.right || this.tripped || tram.s >= this.s || tram.v === 0) return;
+    const v = tram.v, need = (v * v) / (2 * Math.max(1, BRAKE.emergency - st.loss) * 0.9) + v * 0.25 + 2;
+    if (this.s - tram.s <= need) {
+      this.tripped = true;
+      st.event('trip', { junction: this });
+    }
+  }
+}
+
+// A single-track section (GDD §7) shared with the trams the other way, with its own signal (listed with
+// the tram signals). The tram the other way reaches its stop line around the time a punctual tram reaches
+// ours (`due`); the section is kept for it from a moment before, so there is usually a short wait. Whoever
+// is in first holds the section. A tram that drives in on the stop aspect meets the other one head on:
+// it stops on sight and backs out, unless the trams collide.
+class SingleTrack {
+  constructor(def, st) {
+    this.def = def;
+    this.a = def.from;
+    this.b = def.to;
+    this.s = def.from;
+    this.line = def.from - SINGLE.merge - 5;    // our stop line, before the points where the tracks merge
+    this.far = def.to + SINGLE.merge + 5;       // theirs
+    this.label = 'SINGLE TRACK';
+    this.tRef = 0;                              // when a punctual tram reaches our stop line [real s]
+    this.agent = st.add(agent('tram', SINGLE.length, 2.4));
+  }
+
+  reset(rnd) {
+    this.active = rnd() < (this.def.chance ?? 1);
+    this.due = SINGLE.early + rnd() * (SINGLE.late - SINGLE.early);
+    this.held = 'free';     // free | ours | theirs
+    this.done = !this.active;
+    this.wait = 0;
+    Object.assign(this.agent, { visible: false, state: 'due', s: 0, off: 0, dir: PI, speed: 0, cooldown: 0 });
+  }
+
+  get arrival() { return this.tRef + this.due; }
+
+  aspect(t) {
+    if (this.held === 'theirs') return 'stop';
+    if (this.held === 'ours' || this.done) return 'go';
+    const until = this.arrival - SINGLE.reserve - t;
+    return until <= 0 ? 'stop' : until <= STREET.signal.prepare ? 'prepare' : 'go';
+  }
+
+  update(dt, tram, st, prevS) {
+    const t = st.signalTime, S = SINGLE, c = this.agent;
+    if (prevS < this.line && tram.s >= this.line) {
+      if (this.aspect(t) === 'stop') st.event('red', { signal: this });
+      if (this.held !== 'theirs') this.held = 'ours';
+    }
+    if (this.held === 'ours' && tram.s - st.length > this.b + S.merge) this.held = 'free';
+
+    const front = c.s - c.len / 2;   // it drives towards lower s
+    switch (c.state) {
+      case 'due':
+        if (this.active && !this.done && t >= this.arrival - S.approach / S.speed) {
+          Object.assign(c, { state: 'come', visible: true, s: this.far + S.approach + c.len / 2, speed: S.speed });
+        }
+        break;
+      case 'come': {
+        let v = S.speed;
+        if (front > this.far + 0.5) {
+          // before the section: in if it is free, otherwise stop at the signal
+          if (this.held === 'ours') v = Math.min(v, Math.sqrt(2 * 1.2 * Math.max(0, front - this.far)));
+          else if (front - this.far < 2) this.held = 'theirs';
+        } else if (tram.s >= this.line && tram.s < front) {
+          // a tram in the section ahead: stop on sight, then back out to the signal
+          const gap = front - tram.s;
+          v = Math.min(v, Math.sqrt(2 * 2 * Math.max(0, gap - 8)));
+          if (v < 0.1 && tram.stopped) this.wait += dt;
+          if (this.wait > 2) { c.state = 'back'; this.held = 'ours'; }
+        }
+        c.speed = Math.min(v, c.speed + 1.2 * dt);
+        c.s -= c.speed * dt;
+        if (c.s + c.len / 2 < this.a - S.merge && this.held === 'theirs') {
+          this.held = 'free';
+          this.done = true;
+        }
+        if (c.s + c.len / 2 < Math.min(tram.s - st.length - 250, this.a - S.merge - 200)) { c.visible = false; c.state = 'gone'; }
+        break;
+      }
+      case 'back':
+        c.speed = 3;
+        c.s += 3 * dt;
+        if (front >= this.far) { c.state = 'come'; this.wait = 0; }
+        break;
+      default:
+    }
+    c.off = st.other(c.s);
   }
 }
 
@@ -518,7 +652,7 @@ const HAZARDS = { leftTurn: LeftTurn, jaywalker: Jaywalker, parked: Parked, cycl
 
 // The living street (GDD §7): signals, cross traffic, scripted hazards and a lifting bridge, plus collision
 // detection against the tram's swept path. Events go to onEvent(type, data): red, collision,
-// bridge ({ phase: warning | made | cleared }), fall (onto the open bridge).
+// bridge ({ phase: warning | made | cleared }), fall (onto the open bridge), trip (points set wrong).
 // Kept free of Three.js, so it can be tested in Node.
 export class Street {
   constructor(route, track, timetable, tramLength, roadHalf, onEvent) {
@@ -530,6 +664,9 @@ export class Street {
     this.onEvent = onEvent;
     this.agents = [];
     this.signals = (route.intersections ?? []).filter((I) => I.signal).map((I) => new Signal(I, this));
+    // the other track on a double-track line, and the single-track sections where it merges into ours
+    this.other = otherTrack(route.single ?? [], SINGLE.gap, SINGLE.merge);
+    this.signals.push(...(route.single ?? []).map((z) => new SingleTrack(z, this)));
     // the green wave: when a punctual tram passes each stop line, counted from the start of the run
     const t0 = timetable.start - TIMETABLE.leadIn;
     for (const sg of this.signals) sg.tRef = (timetable.at(sg.line) - t0) / TIMETABLE.timeScale;
@@ -538,7 +675,13 @@ export class Street {
     this.bridge = route.bridge ? new Bridge(route.bridge) : null;
     if (this.bridge) this.signals.push(this.bridge);
     this.signals.sort((a, b) => a.line - b.line);
+    this.junctions = (route.junctions ?? []).map((j) => new Junction(j));
     this.reset(1);
+  }
+
+  // The next points ahead within JUNCTION.show, or null.
+  nextJunction(s) {
+    return this.junctions.find((j) => j.s > s && j.s - s < JUNCTION.show) ?? null;
   }
 
   // The green wave shifts with the timetable when a bridge lift is excused (run.shift).
@@ -563,6 +706,7 @@ export class Street {
     this.cap = Infinity;    // the strongest brake that holds on the rails ahead [m/s²]
     for (const sg of this.signals) sg.reset(this.rnd);
     for (const h of this.hazards) h.reset(this.rnd, this);
+    for (const j of this.junctions) j.reset(this.rnd);
   }
 
   // Hazards within earshot react to the bell.
@@ -577,7 +721,7 @@ export class Street {
   nextSignal(s) {
     for (const sg of this.signals) {
       const d = sg.line - s;
-      if (d > -0.5 && d < STREET.signalAhead) return { aspect: sg.aspect(this.signalTime), dist: Math.max(0, d), bridge: sg === this.bridge };
+      if (d > -0.5 && d < STREET.signalAhead) return { aspect: sg.aspect(this.signalTime), dist: Math.max(0, d), label: sg.label };
     }
     return null;
   }
@@ -590,6 +734,7 @@ export class Street {
     this.cap = this.wetAt(tram.s - L, tram.s + 90) ? STREET.wetBrake : Infinity;
     for (const sg of this.signals) sg.update(dt, tram, this, prevS);
     for (const h of this.hazards) h.update(dt, tram, this);
+    for (const j of this.junctions) j.update(dt, tram, this);
 
     // collisions with the tram, and the nearest thing on (or about to be on) the tracks for the HUD
     this.warning = null;

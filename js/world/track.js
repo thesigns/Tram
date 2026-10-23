@@ -6,13 +6,14 @@ const _a = {};
 // Sampled into an arc-length table, so s → position / heading / curvature / grade is a cheap lookup.
 // Heading 0 = forward along −Z, positive curvature turns right. Lateral offset > 0 = right of the track,
 // along the right vector (cos h, 0, sin h). An object facing along the track has rotation.y = −heading.
+// A track can start anywhere (`start`: a pose { x, y, z, h }) – a branch leaving the line at a junction.
 // Kept free of Three.js, so it can be tested in Node.
 export class Track {
-  constructor(pieces, step = 2) {
-    const s = [0], x = [0], y = [0], z = [0], h = [0];
+  constructor(pieces, step = 2, start = { x: 0, y: 0, z: 0, h: 0 }) {
+    let cs = 0, cx = start.x, cy = start.y, cz = start.z, ch = start.h;
+    const s = [0], x = [cx], y = [cy], z = [cz], h = [ch];
     const k = [], g = [];   // per interval between sample i and i + 1
     const spans = [];       // the pieces by distance: { s0, s1, k, limit }
-    let cs = 0, cx = 0, cy = 0, cz = 0, ch = 0;
     for (const p of pieces) {
       const curve = p.type === 'curve';
       const len = curve ? p.radius * p.angle * Math.PI / 180 : p.length;
@@ -78,4 +79,19 @@ export class Track {
     out.grade = this.g[i];
     return out;
   }
+}
+
+// The track the other way on a double-track line: `gap` to the left of ours, merging into it on the
+// single-track sections ({ from, to }) over `merge` meters at each end. Returns s → its offset.
+export function otherTrack(sections, gap, merge) {
+  const smooth = (u) => u * u * (3 - 2 * u);
+  return (s) => {
+    let f = 1;   // 1 = apart, 0 = merged
+    for (const z of sections) {
+      if (s >= z.from && s <= z.to) return 0;
+      if (s > z.from - merge && s < z.from) f = Math.min(f, smooth((z.from - s) / merge));
+      if (s > z.to && s < z.to + merge) f = Math.min(f, smooth((s - z.to) / merge));
+    }
+    return -gap * f;
+  };
 }

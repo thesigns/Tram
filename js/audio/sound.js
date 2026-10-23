@@ -176,6 +176,12 @@ export class Sound {
     this.burst(0.07, 380, 1.4, 0.6);
   }
 
+  // the points motor and the blades
+  points() {
+    this.burst(0.18, 600, 0.5, 0.7);
+    this.thump(0.25, 300, 120, 0.12);
+  }
+
   beep() { this.tone(1000, 0.08, 0.12, 0, [[1, 1]]); }
 
   rating(name) {

@@ -127,6 +127,15 @@ canvas#hud { pointer-events: none; }
   cursor: pointer;
 }
 .ctl.pressed { transform: scale(0.96); background: rgba(80, 84, 88, 0.85); }
+/* points (◄ ▲ ►), shown before a junction: lit = where they lie, green = the line's way */
+.points { display: flex; gap: 6px; }
+.points.hidden { display: none; }
+.points .ctl { flex: 1; height: 58px; padding: 0; font-size: 22px; }
+.points .ctl:disabled { opacity: 0.25; }
+.points .ctl.line { border-color: #9fe05e; }
+.points .ctl.set { background: rgba(248, 244, 232, 0.88); color: #16181a; }
+.points .ctl.moving { animation: blink 0.4s steps(2) infinite; }
+@keyframes blink { 50% { background: rgba(22, 24, 26, 0.62); color: var(--hud); } }
 #doors-btn .open-label { display: none; }
 #doors-btn.open { border-color: #ffb020; color: #ffb020; }
 #doors-btn.open .open-label { display: inline; }
@@ -222,6 +231,7 @@ table.res th:last-child, table.res td:last-child { text-align: right; }
   .btn { padding: 8px; margin: 6px 0; font-size: 20px; }
   #lever { height: min(calc(100vh - 80px), 280px); }
   .ctl { height: 84px; }
+  .points .ctl { height: 50px; }
 }
 
 #loading {

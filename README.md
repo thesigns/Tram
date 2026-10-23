@@ -8,8 +8,10 @@ Low-poly 3D, a mobile-first browser game. Design: [docs/Tram-GDD.md](docs/Tram-G
 Status: **M1 vertical slice, M2 in progress** – Altstadt Line 1 (8 stops through the old town: hills,
 a market square, the city gate, the cathedral square), Hafenberg Line 4 (6 stops from the harbour: the
 quay with cranes and ships, wet rails at the fish market, a lifting bridge, a steep climb, a tunnel under
-the hill and down to the lighthouse) and a training line; stars and saved progress; notched controller,
-tram physics, precision stopping with ratings and combos, interlocked doors, boarding, speed limits
+the hill and down to the lighthouse), Neustadt Line 9 (6 stops along a boulevard on a reserved double
+track: points to set, a single-track section under a roundabout on a flyover) and a training line;
+stars and saved progress; notched controller,
+tram physics, precision stopping with ratings, interlocked doors, boarding, speed limits
 and curves, ride comfort, passengers who each travel somewhere (their mood is the score), a timetable,
 tram signals,
 street hazards (turning cars, pedestrians, a double-parked van, a cyclist), the bell, request stops,
@@ -36,6 +38,7 @@ On a phone in the same network, open `http://<computer-IP>:8765/`, or use GitHub
 | lever: all the way down, past the gap | Space | emergency brake |
 | DOORS (left thumb) | E | open / close the doors (only at standstill) |
 | BELL | B | bell |
+| ◄ ▲ ► (before points) | A / ← and D / → | set the points |
 | II | P / Esc | pause |
 
 Every passenger travels from one stop to another, and their mood is your score – the bar at the top
@@ -65,7 +68,13 @@ cross before the bar comes up, or stop and watch the boat go through – the tim
 
 Each line gives up to three stars by the passengers' average satisfaction (60% / 75% / 90%), and a
 perfect-run badge (everybody delivered and calm). Hafenberg opens with 4 stars (`?debug` opens every
-line). An accident ends the run – try again from the start.
+line), Neustadt with 7. An accident ends the run – try again from the start.
+
+The emergency brake throws the riders forward: the faster you pull it, the angrier they get – it is
+for hazards, never needed if you read the street. Before points, ◄ ▲ ► appear: lit is where the points
+lie, the green edge is your line's way. Set them in time – points set wrong trip the emergency brake
+just before them. On a single-track section wait at its signal for the tram the other way; drive in on
+the stop aspect and you meet it head on.
 
 ## Layout
 

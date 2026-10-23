@@ -47,6 +47,8 @@ export function buildTimetable(track, limits, stops, tramCfg, route) {
     for (const I of route.intersections ?? []) {
       if (I.signal && I.s > stops[i].s && I.s <= stops[i + 1].s) t += T.signalAllowance;
     }
+    // and for each single-track section (waiting for the tram the other way)
+    for (const z of route.single ?? []) if (z.from > stops[i].s && z.from <= stops[i + 1].s) t += T.singleAllowance;
     drive.push(t);
   }
 

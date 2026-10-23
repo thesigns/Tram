@@ -104,7 +104,7 @@ async function loadLine(def) {
   scene.background.copy(fogColor);
   paintSky(sky, look.sky ?? WORLD.skyTop, fogColor);
   ground.position.y = groundLevel(track, route);
-  ground.material.color.set(route.sea != null ? look.sea : WORLD.ground);
+  ground.material.color.set(route.sea != null ? look.sea : look.ground ?? WORLD.ground);
   W = { def, route, track, limits, run, city, structures, passengers, traffic, group };
   tram.reset(run.stops[0].s);
   game.prevS = tram.s;
@@ -132,10 +132,6 @@ function onRunEvent(type, d) {
   const run = W.run;
   switch (type) {
     case 'rating': {
-      if (d.rating === 'EMPTY') {
-        hud.showRating('NOBODY HERE', 'A request stop nobody needed – you could have passed', RATING_COLORS.EMPTY);
-        break;
-      }
       const title = d.rating === 'PERFECT' || d.rating === 'GREAT' ? `${d.rating}!` : d.rating;
       hud.showRating(title, fmtError(d.error) + (d.off ? ` · ${d.off} getting off` : ''), RATING_COLORS[d.rating]);
       sound.rating(d.rating);
@@ -194,6 +190,11 @@ function onRunEvent(type, d) {
       // somebody running for a tram that is still there
       if (d.person.from === run.idx || d.person.from === run.departPending) hud.showNotice('Somebody is running for the tram', '#f2c230', 2.6);
       break;
+    case 'points': sound.points(); break;
+    case 'trip':
+      hud.showNotice('Points set wrong – emergency stop', '#ff8a70', 2.8);
+      sound.notch(-5);
+      break;
     case 'board': W.passengers.board(d.person, tramCfg.doors.map((x) => tram.s - x)); break;
     case 'ready': sound.beep(); break;
     case 'hint': hud.showNotice(d.text, '#f2c230', 1.4); break;
@@ -220,6 +221,36 @@ input.onBell = () => {
   W.run.bell(tram);
 };
 input.onPause = togglePause;
+input.onPoints = (dir) => W.run.setPoints(dir, tram);
+// keyboard: one position left or right of where the points are going
+input.onPointsStep = (k) => {
+  const j = W.run.street.nextJunction(tram.s);
+  if (!j) return;
+  for (let i = ARROWS.indexOf(j.target) + k; i >= 0 && i < ARROWS.length; i += k) {
+    if (j.can(ARROWS[i])) { W.run.setPoints(ARROWS[i], tram); return; }
+  }
+};
+const ARROWS = ['left', 'straight', 'right'];
+const pointsPad = $('points');
+const pointsBtns = [...pointsPad.querySelectorAll('[data-dir]')];
+let pointsKey = '';
+
+// The points buttons show up before a junction: where the points lie (lit), the line's way (green).
+function updatePoints() {
+  const j = game.mode === 'playing' ? W.run.street.nextJunction(tram.s) : null;
+  const key = j ? `${j.s}|${j.target}|${j.moving}` : '';
+  if (key === pointsKey) return;
+  pointsKey = key;
+  pointsPad.classList.toggle('hidden', !j);
+  if (!j) return;
+  for (const btn of pointsBtns) {
+    const d = btn.dataset.dir;
+    btn.disabled = !j.can(d);
+    btn.classList.toggle('line', d === j.way);
+    btn.classList.toggle('set', d === j.target);
+    btn.classList.toggle('moving', d === j.target && j.moving);
+  }
+}
 
 // ---------- game flow ----------
 function resetView() {
@@ -314,7 +345,7 @@ function renderMenu() {
 
 // darker shades of the HUD rating colors, readable on the light card
 const RESULT_COLORS = {
-  PERFECT: '#1f8a4c', GREAT: '#4f8a1f', GOOD: '#9a7400', OK: '#b5651d', MISSED: '#c8382c', PASSED: '#4f8a1f', EMPTY: '#6b665c',
+  PERFECT: '#1f8a4c', GREAT: '#4f8a1f', GOOD: '#9a7400', OK: '#b5651d', MISSED: '#c8382c', PASSED: '#4f8a1f',
 };
 const FAIL_TEXT = {
   collision: (f) => ['YOU CRASHED THE TRAM', `You hit ${VEHICLE[f.what] ?? 'a car'} at ${Math.round(f.kmh)} km/h. The run is over.`],
@@ -323,7 +354,7 @@ const FAIL_TEXT = {
   cyclist: () => ['RUN ENDED', 'You hit a cyclist. Keep your distance and use the bell.'],
 };
 const VEHICLE = { car: 'a car', van: 'a van', lift: 'a forklift' };
-const ROW_NOTE = { PASSED: 'nobody needed it', EMPTY: 'nobody needed it', MISSED: '' };
+const ROW_NOTE = { PASSED: 'nobody needed it', MISSED: '' };
 
 const RESULT_PUNCT = { 'ON TIME': '#1f8a4c', LATE: '#c8382c', EARLY: '#c8382c' };
 
@@ -349,6 +380,7 @@ const CAUSES = [
   ['stopping', 'Walking to the doors'],
   ['missed', 'Missed stops'],
   ['left', 'Left on the platform'],
+  ['emergency', 'Emergency stops'],
   ['safety', 'Signals, doors, bumps'],
 ];
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
@@ -527,6 +559,7 @@ function frame(now) {
   const s = game.prevS + (tram.s - game.prevS) * alpha;
   updateCamera(s, game.mode === 'paused' ? 0 : dt);
   updateCab();
+  updatePoints();
   W.city.update(s);
   W.structures.update(run.street, run.street.time);
   traffic.update(run.street.time);

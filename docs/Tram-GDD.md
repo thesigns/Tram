@@ -68,7 +68,7 @@ Choose a line/run → Depart → Drive (limits, signals, hazards) → Approach s
 - **Master controller (right thumb):** a vertical lever. Push up = power, centre = neutral (detent), pull down = brake. Proposed notches: `P1–P4` power, `N`, `B1–B4` service brake, `EB` emergency brake at the bottom (needs a deliberate pull past a detent). The lever stays where it is released, like a real controller. Haptic tick on each notch (`navigator.vibrate`, where supported).
 - **Doors (left thumb):** one button toggles open/close. The doors always open on the platform side, so there is no side to pick. They are interlocked like on a real tram: they open only at standstill, and traction is cut while any door is open (dashboard light plus a beep if the lever is in power), so the tram cannot depart until the doors are closed. Opening them away from a platform (at a red light, in traffic) is a penalty.
 - **Bell:** warns pedestrians and cars. It makes some hazards clear the track sooner, but spamming it costs passenger mood.
-- **Junction selector:** before a switch, arrows appear (◄ ▲ ►). The player sets the route, as real drivers do with a switch controller. A wrong choice causes a short detour and a time loss.
+- **Junction selector:** before a switch, arrows appear (◄ ▲ ►). The player sets the route, as real drivers do with a switch controller. A wrong choice causes a short detour and a time loss. *Implemented (M2):* the buttons show where the points lie and the line's way; a points indicator stands before them. Points set against the line trip the emergency brake just before them (train protection), so the cost is an emergency stop and lost time, never a wrong turn.
 
 ### 4.2 Landscape and desktop
 
@@ -121,7 +121,7 @@ The score is the **passengers' mood**, shown only at the end of the line (§6.3)
 | doors still on the platform | OK | +0.1 |
 | doors off the platform | MISSED | nobody can get on or off (see §6.3) |
 
-- **Request stops:** at some stops nobody is waiting and nobody inside wants to get off (no stop button pressed), so the player may pass through and gain time. They have to read the cues (the stop lamp on the dashboard, people on the platform). Passing a stop somebody needed angers those people (§6.3).
+- **Request stops:** at some stops nobody is waiting and nobody inside wants to get off (no stop button pressed), so the player may pass through and gain time. They have to read the cues (the stop lamp on the dashboard, people on the platform). Passing a stop somebody needed angers those people (§6.3). Stopping is always right, also at a request stop nobody needed (the driver can't know the tram is empty).
 
 ### 6.2 Timetable
 
@@ -141,6 +141,7 @@ The score is the **passengers' mood**, shown only at the end of the line (§6.3)
   - the stop marker – the people getting on and off there (§6.1);
   - a missed stop – the riders carried past (they get off at the next one) and, as much as it gets, the people left waiting;
   - doors closed and gone while somebody is still on the platform – those people, as much as it gets;
+  - an emergency stop – the riders, in proportion to the speed (and the comfort falls hard);
   - passing a stop signal, doors opened away from a platform, a minor collision – the riders.
 - **HUD:** a bar with one segment per passenger on the line, sorted green (calm) – yellow (annoyed, from 0.4) – red (furious, from 0.8); the ones aboard are bright. The comfort bar sits under it.
 - **Score** = the sum of every passenger's satisfaction (1 − anger) × 100, shown only at the end of the line, with what upset them.
@@ -171,6 +172,8 @@ Hazards are scripted per route (placed at points along the track) with some rand
 - **Other trams:** a tram ahead at a busy stop or a single-track section with a **passing loop** where you must wait for the oncoming tram (a signal controls it).
 - **Special events:** a delivery truck blocking the track (stop and wait), a broken-down car, a parade or market day (slow zone).
 
+Single-track sections (M2): the tram the other way reaches the section around the time a punctual tram does, so there is usually a short wait at its signal; whoever enters first holds the section.
+
 Implementation notes (M1): tram signals show a horizontal bar (stop), a blinking dot (about to change, 5 s) and a vertical bar (go); their phases form a **green wave** for the timetable, so a punctual tram meets the go aspect. Cross traffic starts on the stop aspect and gives way to a tram in the intersection unless it went through on stop. A hazard commits only while the tram can still stop calmly, and never once it could not stop with B4 after a short reaction, so every hazard is avoidable without luck. Because people are only a few pixels tall on a phone at the distances that matter, the HUD marks hazards worth watching with a small "!" and warns when something is on the tracks ahead.
 
 Telegraphing rule: every hazard must be **visible early** (people looking at the road, a car's indicator blinking, brake lights), so a good player can anticipate it rather than react to surprises. In numbers: a hazard's cue must be readable at least one full service stop plus ~2 s ahead at the current limit (~90 m at 50 km/h), so it can always be handled without the emergency brake. Fog and draw distance must never hide that zone.
@@ -186,7 +189,9 @@ Fictional cities give freedom to design routes as levels, each with a strong ide
 
 Each city has 2–4 **lines**, and each line has variants: **day / night / rain / rush hour**. Rush hour means more passengers, longer boarding and more traffic.
 
-Implementation notes (M2, Hafenberg Line 4): the line starts on the quay (cranes, a moored ship, the fish market with wet rails), crosses a double-leaf **lifting bridge** and climbs 6% through a tight R25 curve to Kirchberg, runs through a curving tunnel under the hill and descends along a sea terrace to the lighthouse. The bridge lifts in about 70% of runs. Its signal shows "prepare" while the tram can still stop calmly (plus a random margin), so the race is sometimes possible and sometimes not: crossing on "prepare" earns a bonus, crossing on "stop" is a red-signal penalty, and driving onto a raised leaf ends the run. The bridge never lifts with the tram past its stop line. The delay a lift causes is excused: the timetable and the green wave move with it.
+Implementation notes (M2, Neustadt Line 9): a boulevard with a reserved double track on grass in the middle, 60 km/h, tall bright blocks. Two junctions: the line goes straight past a branch into a depot street, and turns left where the branch continues along the boulevard. Under a roundabout on a flyover the tracks merge into a **single-track section** between the walls that carry the deck: its signal lets the tram in once the tram the other way has come through (usually a short wait); driving in on the stop aspect means meeting it head on.
+
+Implementation notes (M2, Hafenberg Line 4): the line starts on the quay (cranes, a moored ship, the fish market with wet rails), crosses a double-leaf **lifting bridge** and climbs 6% through a tight R25 curve to Kirchberg, runs through a curving tunnel under the hill and descends along a sea terrace to the lighthouse. The bridge lifts in about 70% of runs. Its signal shows "prepare" while the tram can still stop calmly (plus a random margin), so the race is sometimes possible and sometimes not: crossing on "prepare" is fine, crossing on "stop" means passing a stop signal (the riders are not amused), and driving onto a raised leaf ends the run. The bridge never lifts with the tram past its stop line. The delay a lift causes is excused: the timetable and the green wave move with it.
 
 Route features to mix in: loop termini, stub termini (with a double-ended tram, so the player switches cabs), junctions, depot exit/entry runs, gradients, tunnels, bridges, single-track sections, mixed traffic vs. reserved track, stops on islands vs. kerbside stops (passengers crossing the road).
 
@@ -287,7 +292,7 @@ Synthesised with Web Audio where possible (the *Jasta* approach, no audio files 
 - Hafenberg and Neustadt, junctions, passing loop, lifting bridge, tunnel.
 - Second and third tram types, night and rain variants.
 
-Progress: Hafenberg Line 4 is done (lifting bridge, tunnel, steep grades, wet rails and adhesion, a forklift crossing from the warehouses). Next: Neustadt with junctions and a passing loop, then the tram types and the night and rain variants.
+Progress: Hafenberg Line 4 is done (lifting bridge, tunnel, steep grades, wet rails and adhesion, a forklift crossing from the warehouses), and so is Neustadt Line 9 (reserved double track, points, a single-track section under a roundabout with a tram the other way). Next: the tram types and the night and rain variants.
 
 ### M3 – Polish
 
