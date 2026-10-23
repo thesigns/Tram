@@ -57,8 +57,8 @@ canvas#hud { pointer-events: none; }
   position: absolute;
   right: max(10px, env(safe-area-inset-right));
   bottom: max(14px, calc(env(safe-area-inset-bottom) + 8px));
-  width: 108px;
-  height: clamp(250px, 44vh, 440px);
+  width: 150px;
+  height: clamp(200px, 32vh, 320px);   /* short travel: P4 to B4 is a small thumb movement */
   border-radius: 16px;
   background: rgba(22, 24, 26, 0.6);
   border: 2px solid rgba(248, 244, 232, 0.18);
@@ -66,7 +66,7 @@ canvas#hud { pointer-events: none; }
 }
 #lever .slot {
   position: absolute;
-  top: 14px; bottom: 14px; right: 31px;
+  top: 14px; bottom: 14px; right: 52px;
   width: 10px;
   border-radius: 5px;
   background: rgba(0, 0, 0, 0.6);
@@ -86,7 +86,7 @@ canvas#hud { pointer-events: none; }
 #lever .notch.active { opacity: 1; font-weight: 800; font-size: 16px; }
 #lever .handle {
   position: absolute;
-  left: 40px; right: 8px; top: 0;
+  left: 46px; right: 10px; top: 0;
   height: 32px;
   margin-top: -16px;
   border-radius: 9px;
@@ -221,7 +221,7 @@ table.res th:last-child, table.res td:last-child { text-align: right; }
   .card { padding: 12px 18px; }
   .card h1 { font-size: 44px; }
   .btn { padding: 8px; margin: 6px 0; font-size: 20px; }
-  #lever { height: calc(100vh - 80px); }
+  #lever { height: min(calc(100vh - 80px), 280px); }
   .ctl { height: 46px; }
   .ctl-doors { height: 70px; }
 }

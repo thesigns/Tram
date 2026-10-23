@@ -1,6 +1,5 @@
 import { LIMITS, STOPS, TIMETABLE } from '../config.js';
 import { clamp, formatClock, formatDelta } from '../core/utils.js';
-import { EB, notchName } from '../core/tram.js';
 
 const FONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
 const INK = 'rgba(248,244,232,0.96)';
@@ -108,11 +107,9 @@ export class Hud {
     }
     const sig = run.street.nextSignal(tram.s);
     if (sig) this.signalIcon(c, w / 2 - 120, y - 10, sig, blink);
-    const n = tram.notch;
-    this.text(notchName(n), w / 2, y + 20, 15, n === EB ? RED : n > 0 ? '#9fe0a0' : n < 0 ? AMBER : DIM, 'center');
-    // wet rails under the tram or ahead (GDD §5 adhesion)
+    // wet rails under the tram or ahead (GDD §5 adhesion); the notch is on the lever, not here
     const wet = run.wetAhead(tram.s);
-    if (wet) this.text(wet.dist > 0 ? `WET RAILS in ${Math.round(wet.dist)} m` : 'WET RAILS', w / 2 + 34, y + 20, 14, BLUE, 'left');
+    if (wet) this.text(wet.dist > 0 ? `WET RAILS in ${Math.round(wet.dist)} m` : 'WET RAILS', w / 2, y + 20, 14, BLUE, 'center');
 
     // clock and the schedule: countdown at a stop, live delta on the way
     const clock = formatClock(run.clock);
