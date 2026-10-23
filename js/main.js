@@ -311,18 +311,15 @@ function togglePause() {
 
 const starText = (n) => '★'.repeat(n) + '☆'.repeat(3 - n);
 
-// The line list (GDD §9): lines unlock with the stars collected.
+// The line list (GDD §9): every line is open; the stars are a rating per line, totalled at the top.
 function renderMenu() {
   const list = $('lines');
   list.replaceChildren();
-  const total = totalStars(progress);
-  $('menu-stars').textContent = `★ ${total}`;
+  $('menu-stars').textContent = `★ ${totalStars(progress)}`;
   for (const def of lines) {
     const rec = progress.lines[def.id];
-    const locked = !debug && total < (def.unlock ?? 0);   // ?debug opens every line
     const btn = document.createElement('button');
     btn.className = 'line';
-    btn.disabled = locked;
     const info = document.createElement('span');
     info.className = 'line-info';
     const title = document.createElement('b');
@@ -333,9 +330,9 @@ function renderMenu() {
     const score = document.createElement('span');
     score.className = 'line-score';
     const stars = document.createElement('b');
-    stars.textContent = locked ? `🔒 ${def.unlock} ★` : starText(rec?.stars ?? 0);
+    stars.textContent = starText(rec?.stars ?? 0);
     const best = document.createElement('small');
-    best.textContent = rec?.best != null ? `best ${rec.best}${rec.perfect ? ' · perfect' : ''}` : locked ? 'locked' : 'not driven yet';
+    best.textContent = rec?.best != null ? `best ${rec.best}${rec.perfect ? ' · perfect' : ''}` : 'not driven yet';
     score.append(stars, best);
     btn.append(info, score);
     btn.addEventListener('click', () => chooseLine(def));

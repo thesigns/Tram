@@ -67,8 +67,9 @@ braking sooner. At the lifting bridge, a blinking dot on the bridge signal means
 cross before the bar comes up, or stop and watch the boat go through – the timetable waits with you.
 
 Each line gives up to three stars by the passengers' average satisfaction (60% / 75% / 90%), and a
-perfect-run badge (everybody delivered and calm). Hafenberg opens with 4 stars (`?debug` opens every
-line), Neustadt with 7. An accident ends the run – try again from the start.
+perfect-run badge (everybody delivered and calm). Every line is open from the start, listed from the
+easiest; the stars and your best score are there to beat. An accident ends the run – try again from
+the start.
 
 The emergency brake throws the riders forward: the faster you pull it, the angrier they get – it is
 for hazards, never needed if you read the street. Before points, ◄ ▲ ► appear: lit is where the points

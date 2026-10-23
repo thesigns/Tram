@@ -35,13 +35,14 @@ run, points, a single-track section, a lifting bridge, tunnels, wet rails.
 - [ ] Altstadt per GDD §8: a narrow single-track section with a passing loop (the mechanics exist –
       `single` in the route data) and a loop terminus at the cathedral square (needs a loop track).
 - [ ] Star thresholds are global (`PASSENGERS.stars` 60 / 75 / 90 %) – confirm they suit every line.
-- [ ] More lines per city (GDD: 2–4), unlocking one after another within a city.
+- [x] No unlocking: every line is open from the start; stars are a rating per line.
+- [ ] More lines per city (GDD: 2–4).
 
 ## M2 – remaining
 
 - [ ] Tram types (GDD §9): *Articulated* (1990s, longer, heavier) and *Low-floor* (30+ m, smooth and
       powerful, hard to fit on short platforms). Different mass, length, doors, eye position, cab model;
-      `TRAMS` in `js/config.js`. A way to choose or unlock them; liveries per city.
+      `TRAMS` in `js/config.js`. A way to choose them; liveries per city.
 - [ ] Variants per line (GDD §8): night (street lamps, lit windows, headlight, darker sky and fog), rain
       (wet rails on the whole line, wipers, droplets), rush hour (more passengers, longer boarding, more
       traffic). Stars per variant?

@@ -265,7 +265,6 @@ table.res th:last-child, table.res td:last-child { text-align: right; }
   cursor: pointer;
 }
 .line:active { background: #33373c; }
-.line:disabled { opacity: 0.5; cursor: default; border-left-color: #6b665c; }
 .line-info b { display: block; font-size: 21px; font-weight: 700; letter-spacing: 1px; }
 .line-info small, .line-score small { display: block; font-size: 13px; opacity: 0.75; }
 .line-score { text-align: right; white-space: nowrap; }

@@ -36,12 +36,12 @@ The predecessor prototype (*Jasta 11*, a WWI dogfight game) showed that free 3D 
 ```
 Choose a line/run → Depart → Drive (limits, signals, hazards) → Approach stop → Stop on the mark
       ↑                                                                              ↓
- Unlocks ← Results (stars, passengers' mood) ← Terminus ← … next stop ← Depart on time ← Doors open / passengers board / doors close
+ Records ← Results (stars, passengers' mood) ← Terminus ← … next stop ← Depart on time ← Doors open / passengers board / doors close
 ```
 
 **Within a run:** depart → accelerate → cruise and react → brake into the stop → doors → depart. There are 6–10 stops per run.
 
-**Across runs:** stars unlock new lines, cities, trams, weather and night shifts.
+**Across runs:** every line is open from the start; stars and best scores per line are the records to beat.
 
 ## 4. Controls
 
@@ -197,7 +197,7 @@ Route features to mix in: loop termini, stub termini (with a double-ended tram, 
 
 ## 9. Progression and content
 
-- **Career:** cities unlock in sequence by total stars; lines within a city unlock one after another.
+- **Career:** no unlocking – every city and line is open from the start, listed from the easiest. Each line keeps its stars (0–3), best score and the perfect-run badge; the menu shows the total stars.
 - **Trams** (fictional, inspired by real types):
   - *Classic* (1960s high-floor, inspired by Konstal 13N / 105N): light, lively, harsh brakes, short.
   - *Articulated* (1990s): longer and heavier.
@@ -269,7 +269,7 @@ Synthesised with Web Audio where possible (the *Jasta* approach, no audio files 
 
 ### 14.5 Saving
 
-- Progress (stars, unlocks, options) in `localStorage`, wrapped in try/catch. No accounts.
+- Progress (stars, best scores, options) in `localStorage`, wrapped in try/catch. No accounts.
 
 ## 15. Scope and milestones
 
