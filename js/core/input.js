@@ -140,7 +140,7 @@ export class Input {
         case 'KeyS': case 'ArrowDown': if (this.notch !== EB) this.setNotch(Math.max(-4, this.notch - 1)); break;
         case 'Space': this.setNotch(EB); break;
         case 'KeyE': this.onDoors?.(); break;
-        case 'KeyB': this.onBell?.(); break;
+        case 'KeyR': this.onBell?.(); break;   // R – ring the bell
         case 'KeyA': case 'ArrowLeft': this.onPointsStep?.(-1); break;
         case 'KeyD': case 'ArrowRight': this.onPointsStep?.(1); break;
         default:

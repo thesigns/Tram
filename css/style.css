@@ -159,6 +159,21 @@ canvas#hud { pointer-events: none; }
   font: 700 15px var(--font);
 }
 
+/* a phone held sideways: Tram is played upright on phones, landscape only on a computer
+   (the same query as SIDEWAYS in js/main.js) */
+#rotate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  place-items: center;
+  padding: 16px;
+  background: var(--ink);
+}
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  #rotate { display: grid; }
+}
+
 /* --- Menu screens --- */
 .screen {
   position: fixed;

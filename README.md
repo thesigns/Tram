@@ -37,7 +37,7 @@ On a phone in the same network, open `http://<computer-IP>:8765/`, or use GitHub
 | lever: down | S / ↓ | brake (B1–B4) |
 | lever: all the way down, past the gap | Space | emergency brake |
 | DOORS (left thumb) | E | open / close the doors (only at standstill) |
-| BELL | B | bell |
+| BELL | R | ring the bell |
 | ◄ ▲ ► (before points) | A / ← and D / → | set the points |
 | II | P / Esc | pause |
 

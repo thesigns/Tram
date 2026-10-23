@@ -10,7 +10,7 @@
 |---|---|
 | Genre | Arcade driving / light simulation |
 | Platform | Web browser, phones first (Android Chrome, iOS Safari), desktop as a bonus |
-| Orientation | Portrait first, landscape supported |
+| Orientation | Portrait on phones; landscape only on a computer |
 | Session | A single run takes 3–6 minutes |
 | Visual style | Low-poly, flat-shaded 3D, cab view |
 | Tech | Vanilla JS + Three.js, no build step, hosted on GitHub Pages |
@@ -72,8 +72,8 @@ Choose a line/run → Depart → Drive (limits, signals, hazards) → Approach s
 
 ### 4.2 Landscape and desktop
 
-- **Landscape:** the lever on the right edge, buttons on the left edge, a wider cab view.
-- **Keyboard:** W/S or ↑/↓ move the lever one notch, Space for emergency brake, A/D or ←/→ step the junction selection one position left or right (◄ ▲ ►), E for doors, B for the bell.
+- **Landscape (computer only):** the lever on the right edge, buttons on the left edge, a wider cab view. A phone held sideways shows a "turn your phone" card and pauses the run – one thumb on the lever works best upright.
+- **Keyboard:** W/S or ↑/↓ move the lever one notch, Space for emergency brake, A/D or ←/→ step the junction selection one position left or right (◄ ▲ ►), E for doors, R to ring the bell.
 
 ### 4.3 Accessibility options
 

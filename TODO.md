@@ -10,15 +10,12 @@ run, points, a single-track section, a lifting bridge, tunnels, wet rails.
 ## Feedback from playtests (check first)
 
 - [ ] Ask the user for their latest playtest notes and fix those before anything else.
-- [ ] Overspeed tuning: speeding hurts steeply between +10% and +30% over the limit (bot: +20% for a
-      whole line ≈ 68% satisfaction on Hafenberg). Confirm it feels right on a phone.
-- [ ] Emergency brake anger (`PASSENGERS.emergency`, `COMFORT.emergencyKmh`): confirm it is felt but
-      not excessive.
-- [ ] Neustadt on a phone: are the points (buttons, indicator, HUD prompt) readable? Is the wait at the
-      single-track signal (≈ 5 s on average, up to 15 s) too long?
-- [ ] Not yet seen on a real phone: Hafenberg (tunnel darkness, bridge signal, "WET RAILS"), the
-      passenger bar, the bigger DOORS/BELL buttons, the shorter lever.
-- [ ] Landscape: the BELL button (and the points buttons) overlap the bottom of the street view.
+- [x] Overspeed tuning, emergency brake anger, Neustadt on a phone (points, single-track wait),
+      Hafenberg on a phone, the passenger bar, DOORS/BELL buttons, the lever – confirmed OK (Oct 2026).
+- [x] No landscape on phones: held sideways, a "turn your phone" card and the run pauses; landscape
+      stays for computers. Bell on R ("ring the bell"), next to W / E.
+- [x] No unlocking (every line open), DINish font, no overspeed text prompts.
+- [ ] Results screen with DINish on a phone: does the per-stop table (4 columns) still fit at 390 px?
 
 ## Passengers – polish
 

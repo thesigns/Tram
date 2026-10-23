@@ -598,6 +598,11 @@ for (const id of ['lines-btn', 'pause-lines-btn']) $(id).addEventListener('click
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && game.mode === 'playing') setMode('paused');
 });
+// a phone turned sideways shows the "turn your phone" card (css: #rotate); the run waits paused
+const SIDEWAYS = window.matchMedia('(orientation: landscape) and (pointer: coarse) and (max-height: 500px)');
+SIDEWAYS.addEventListener('change', () => {
+  if (SIDEWAYS.matches && game.mode === 'playing') setMode('paused');
+});
 window.addEventListener('resize', resize);
 
 if (debug) {
