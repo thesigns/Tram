@@ -13,8 +13,9 @@ const _c = new THREE.Color();
 const _t = {};
 const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 
-// People waiting on the platforms: two instanced meshes (bodies, heads) for the whole line.
-// Boarding: each walks to the nearest door and disappears inside.
+// People waiting on the platforms (the crowd's waiting passengers, js/core/crowd.js): two instanced meshes
+// (bodies, heads) for the whole line. Latecomers walk onto the platform; boarding, each walks to the
+// nearest door and disappears inside.
 export class Passengers {
   constructor(scene, track, stops, seed) {
     this.track = track;
@@ -26,7 +27,7 @@ export class Passengers {
     this.bodies.count = this.heads.count = total;
     this.people = [];             // { s, off, scale, yaw, y }
     this.index = stops.map(() => []);
-    this.walkers = [];            // { i, s0, o0, s1, o1, t, d }
+    this.walkers = [];            // { i, s0, o0, s1, o1, t, d, stay }
 
     const rnd = mulberry32(seed * 7 + 3);
     const top = STOPS.platformHeight;
@@ -43,7 +44,8 @@ export class Passengers {
         this.index[si].push(i);
       }
     });
-    this.reset(stops);
+    this.stops = stops;
+    this.reset(null);
     scene.add(this.bodies, this.heads);
   }
 
@@ -56,15 +58,26 @@ export class Passengers {
     this.heads.setMatrixAt(i, _m.compose(_p.set(p.x, person.y + 1.35 * person.scale, p.z), _q, _s));
   }
 
-  // Show the people actually waiting in this run (stops[i].waiting of the ones built).
-  reset(stops) {
+  // Show the people waiting on the platforms in this run (those already there).
+  reset(crowd) {
     this.walkers = [];
-    this.index.forEach((list, si) => list.forEach((i, k) => {
+    for (let i = 0; i < this.people.length; i++) this.hide(i);
+    for (const p of crowd?.people ?? []) {
+      const i = this.index[p.from]?.[p.slot];
+      if (i === undefined || p.state !== 'waiting' || !p.here) continue;
       const pp = this.people[i];
-      if (k < stops[si].waiting) this.place(i, pp.s, pp.off, pp.yaw);
-      else this.hide(i);
-    }));
+      this.place(i, pp.s, pp.off, pp.yaw);
+    }
     this.flush();
+  }
+
+  // A latecomer walks onto the platform from its entry to their spot.
+  arrive(person) {
+    const i = this.index[person.from]?.[person.slot];
+    if (i === undefined) return;
+    const pp = this.people[i], st = this.stops[person.from];
+    const s0 = st.start + 0.5, o0 = STOPS.platformEdge + STOPS.platformWidth - 0.4;
+    this.walkers.push({ i, s0, o0, s1: pp.s, o1: pp.off, t: 0, d: Math.hypot(pp.s - s0, pp.off - o0) / (WALK * 1.6), stay: true });
   }
 
   hide(i) {
@@ -72,10 +85,11 @@ export class Passengers {
     this.heads.setMatrixAt(i, HIDDEN);
   }
 
-  // Passenger k of a stop boards through the nearest door (doors: positions along the track).
-  board(stop, k, doors) {
-    const i = this.index[stop]?.[k];
+  // A passenger boards through the nearest door (doors: positions along the track).
+  board(person, doors) {
+    const i = this.index[person.from]?.[person.slot];
     if (i === undefined) return;
+    this.walkers = this.walkers.filter((w) => w.i !== i);
     const pp = this.people[i];
     const door = doors.reduce((a, d) => (Math.abs(d - pp.s) < Math.abs(a - pp.s) ? d : a));
     const o1 = STOPS.platformEdge + 0.2;
@@ -87,7 +101,11 @@ export class Passengers {
     for (const w of this.walkers) {
       w.t += dt;
       const f = Math.min(1, w.t / Math.max(w.d, 0.01));
-      if (f >= 1) { this.hide(w.i); continue; }
+      if (f >= 1) {
+        if (w.stay) this.place(w.i, w.s1, w.o1, this.people[w.i].yaw);
+        else this.hide(w.i);
+        continue;
+      }
       const p = this.track.at(w.s0, 0, _t);
       // heading in the track frame, turned into a world yaw (models face −Z)
       const ds = w.s1 - w.s0, doff = w.o1 - w.o0;

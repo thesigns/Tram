@@ -79,7 +79,9 @@ export class Sound {
     this.whineGain.gain.setTargetAtTime(tram.slip ? 0.05 : effort * 0.03 * moving, t, 0.08);
     const sp = clamp(v / 14, 0, 1.3);
     this.rollFilter.frequency.setTargetAtTime(160 + v * 50, t, 0.2);
-    this.rollGain.gain.setTargetAtTime(sp * 0.16, t, 0.15);
+    // too fast, the tram rattles
+    this.rollGain.gain.setTargetAtTime(sp * 0.16 + run.rough * 0.14, t, 0.15);
+    if (run.rough > 0.15 && Math.random() < run.rough * 0.25) this.burst(0.05 + run.rough * 0.12, 700 + Math.random() * 900, 0.06, 1.5);
     const squeal = tram.brake > 0.5 && v > 0.05 && v < 2.2 ? 0.035 : 0;
     this.squealGain.gain.setTargetAtTime(squeal, t, squeal ? 0.15 : 0.05);
     const excess = clamp((run.lateral - COMFORT.lateralFree) / COMFORT.lateralFree, 0, 1);
@@ -195,7 +197,8 @@ export class Sound {
     this.burst(0.5, 900, 0.35, 0.8);
   }
 
-  derail() {
+  // a crash
+  crash() {
     this.burst(0.9, 500, 1.8, 0.4, 'lowpass');
     this.burst(0.5, 2600, 1.2, 3);
     this.thump(0.8, 110, 35, 0.9);

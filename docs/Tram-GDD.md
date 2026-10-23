@@ -28,7 +28,7 @@ The predecessor prototype (*Jasta 11*, a WWI dogfight game) showed that free 3D 
 1. **One thumb, one lever.** The core driving needs only the master controller. Everything else (doors, bell, junctions) is a tap.
 2. **Every stop is a skill shot.** Precision stopping is the heartbeat of the game and must feel great: clear marker, readable distance, satisfying rating.
 3. **A living street.** The city reacts and gets in the way: traffic, pedestrians, signals. Reading the street ahead is the real skill.
-4. **Smooth is fast.** Gentle acceleration and braking are rewarded; jerky driving costs score. Good players drive like real motormen.
+4. **Smooth is fast.** Gentle acceleration and braking are rewarded; jerky or too fast driving shakes the passengers, and their mood is the score. Good players drive like real motormen.
 5. **Short and replayable.** Runs are short, scored with stars, and invite "one more try".
 
 ## 3. Core loop
@@ -36,7 +36,7 @@ The predecessor prototype (*Jasta 11*, a WWI dogfight game) showed that free 3D 
 ```
 Choose a line/run → Depart → Drive (limits, signals, hazards) → Approach stop → Stop on the mark
       ↑                                                                              ↓
- Unlocks ← Results (stars, score) ← Terminus ← … next stop ← Depart on time ← Doors open / passengers board / doors close
+ Unlocks ← Results (stars, passengers' mood) ← Terminus ← … next stop ← Depart on time ← Doors open / passengers board / doors close
 ```
 
 **Within a run:** depart → accelerate → cruise and react → brake into the stop → doors → depart. There are 6–10 stops per run.
@@ -87,11 +87,11 @@ The tram runs along a track centreline, so its position is a single number `s`, 
 
 - **Traction:** force from the power notch; it is constant up to a base speed and then falls off, like a real traction motor.
 - **Resistance:** rolling and aero drag, plus the gradient component (`g · sin θ`). Hills matter.
-- **Brakes:** service brake B1–B4 ≈ 0.4 / 0.8 / 1.2 / 1.6 m/s² (B4 is a little above a real tram's ~1.3 m/s², for arcade pacing); emergency brake ~2.8 m/s² (magnetic track brake), with an extra comfort and score penalty.
+- **Brakes:** service brake B1–B4 ≈ 0.4 / 0.8 / 1.2 / 1.6 m/s² (B4 is a little above a real tram's ~1.3 m/s², for arcade pacing); emergency brake ~2.8 m/s² (magnetic track brake), with an extra comfort penalty.
 - **Adhesion:** a wet or leafy rail lowers the available grip. Too much power or brake causes wheel slip or slide (warning light plus sound). A **sand** button could be added later. *Implemented (M2):* wet rails give 1.1 m/s² of grip, so B3, B4 and P4 from a standstill are too much; sliding or slipping wheels transmit only about half of it. The emergency brake's magnetic track brakes don't depend on adhesion. Hazards and the timetable assume B2 on wet rails, and less braking downhill.
 - **Mass:** each tram type has a different mass, so different inertia and braking distances. That is the main "feel" difference between vehicles.
 - **Jerk:** the rate of change of acceleration drives the **comfort meter**. Moving smoothly through the notches keeps passengers happy.
-- **Curves:** each curve has a safe speed, v = √(0.7 m/s² · R), signed rounded down to 5 km/h (R 100 m → 30 km/h, R 25 m → 15 km/h). Over it, there is wheel squeal and a comfort penalty; far over it (arcade threshold, +40%), the tram **derails** and the run fails. A higher limit applies only once the whole tram has passed its sign.
+- **Curves:** each curve has a safe speed, v = √(0.7 m/s² · R), signed rounded down to 5 km/h (R 100 m → 30 km/h, R 25 m → 15 km/h). Over it, the wheels squeal, the tram lurches and the comfort falls fast. There is **no derailment**: going too fast is part of the fun, and the passengers pay for it. A higher limit applies only once the whole tram has passed its sign. Over any posted limit the tram shakes too, less than in a curve.
 
 Target feel: close to a real tram, compressed slightly for arcade pacing (the numbers below already include that):
 
@@ -105,51 +105,60 @@ A normal stop is a long, readable approach, which is what makes precision stoppi
 
 ## 6. Stops and scoring
 
+The score is the **passengers' mood**, shown only at the end of the line (§6.3). Everything the driver does reaches the score through them: how precisely the tram stops, how smoothly and how punctually it runs, who gets left behind.
+
 ### 6.1 Precision stopping
 
 - Each platform has a **stop marker** for the front door (or cab).
 - On approach, the HUD shows the distance to the marker in metres, switching to a precision bar for the last 20 m.
-- Rating by the final error:
+- Rating by the final error, shown as a popup (PERFECT!). The people getting on and off there walk less or more to the doors:
 
-| Error | Rating | Points |
+| Error | Rating | Their anger |
 |---|---|---|
-| ≤ 0.5 m | PERFECT | 1000 |
-| ≤ 1.5 m | GREAT | 700 |
-| ≤ 3 m | GOOD | 400 |
-| doors still on the platform | OK | 150 |
-| doors off the platform | MISSED | 0, and the tram must reposition (time loss) |
+| ≤ 0.5 m | PERFECT | −0.05 (calmer) |
+| ≤ 1.5 m | GREAT | 0 |
+| ≤ 3 m | GOOD | +0.04 |
+| doors still on the platform | OK | +0.1 |
+| doors off the platform | MISSED | nobody can get on or off (see §6.3) |
 
-- A **combo** for consecutive PERFECT/GREAT stops multiplies the score.
-- **Request stops:** at some stops nobody is waiting and nobody pressed the stop button, so the player may pass through. That is a time bonus, but only if they read the cues correctly (stop light on the dashboard, people on the platform). Skipping a stop someone requested is a penalty. Passing an empty request stop scores like a GOOD stop and keeps the combo; stopping there anyway scores nothing (the timetable assumes the stop, so passing gains time).
+- **Request stops:** at some stops nobody is waiting and nobody inside wants to get off (no stop button pressed), so the player may pass through and gain time. They have to read the cues (the stop lamp on the dashboard, people on the platform). Passing a stop somebody needed angers those people (§6.3).
 
 ### 6.2 Timetable
 
 - Each stop has a scheduled departure time. Game time runs faster than real time (≈ ×4), so a 2:00 timetable segment takes ~30 s of play. The timetable, the HUD clock and the schedule delta are all in **game time**, and so are the tolerances below (real-time equivalents in brackets).
 - The tram **departs** when it starts moving after the doors have closed.
-- **Punctuality:** departing between 0:05 early and 0:30 late (≈ 1 s early to 8 s late in real time) counts as on time and scores full points. Departing later is a penalty that grows with the delay. **Departing early** (more than 0:05) is a bigger penalty, because passengers get left behind. The window is asymmetric on purpose: waiting for the departure time is always in the player's hands, while recovering a delay often is not.
+- **Punctuality:** departing between 0:05 early and 0:30 late (≈ 1 s early to 8 s late in real time) counts as on time. A late tram angers the people waiting for it and the people riding to a stop it should already have reached. Departing early leaves behind whoever was still running for the tram.
 - The HUD shows the delta to schedule (`+0:12`, `−0:05`) and, while the tram is at a stop, a countdown to departure.
 - Scheduled times are generated from a reference driving profile (full power to just under the limits, braking at 1.0 m/s², the expected dwell) and rounded up, so every timetable is achievable and tight. A route can loosen it with a slack factor (e.g. for the tutorial city) or fix individual times.
 
-### 6.3 Passengers and comfort
+### 6.3 Passengers, comfort and the score
 
-- A comfort meter (0–100) falls with jerk, emergency braking, curve overspeed and hard door closing.
-- Boarding is a short animation (simple low-poly people). Closing the doors too early, while people are still boarding, costs points.
-- End of run: **passenger rating** from average comfort plus incidents.
+- **Every passenger is a person** who waits at one stop and rides to another, with an anger from 0 (calm) to 1 (furious). Some are aboard from the first stop; a few only reach the platform just before the departure (running for the tram). Everybody starts calm.
+- **Comfort** (0–100) is how the ride feels right now: it falls with jerk, the emergency brake, a curve taken too fast and driving over the limit, and recovers within seconds on a smooth ride. While it is low, the riders get angrier; that part fades again on a long smooth ride.
+- **What angers whom** (the numbers are tuning, in `PASSENGERS` in the code):
+  - a rough ride – the riders;
+  - lateness – the people waiting at a stop the tram should have reached, and the riders whose stop it is;
+  - the stop marker – the people getting on and off there (§6.1);
+  - a missed stop – the riders carried past (they get off at the next one) and, as much as it gets, the people left waiting;
+  - doors closed and gone while somebody is still on the platform – those people, as much as it gets;
+  - passing a stop signal, doors opened away from a platform, a minor collision – the riders.
+- **HUD:** a bar with one segment per passenger on the line, sorted green (calm) – yellow (annoyed, from 0.4) – red (furious, from 0.8); the ones aboard are bright. The comfort bar sits under it.
+- **Score** = the sum of every passenger's satisfaction (1 − anger) × 100, shown only at the end of the line, with what upset them.
+- Boarding is a short animation (simple low-poly people); latecomers walk onto the platform.
 
-### 6.4 Penalties and fails
+### 6.4 Accidents
 
 | Event | Result |
 |---|---|
-| Overspeed vs. limit | Penalty per second over |
-| Running a red tram signal | Large penalty |
-| Collision with a car | Large penalty; above a speed threshold, run failed |
-| Hitting a pedestrian | **Run failed.** The game avoids gore: the screen fades and a "Run ended" card appears. |
-| Derailment | Run failed |
-| Doors opened away from a platform | Penalty |
+| Hitting a pedestrian or a cyclist | **Run over.** The game avoids gore: the screen fades and a "Run ended" card appears. |
+| Hitting a car at speed, driving onto a raised bridge leaf | **Run over** ("You crashed the tram"). |
+| A minor bump (a car, at low speed) | The tram stops dead; the riders are furious. |
+
+There is no continuing after an accident: the next try starts the line again.
 
 ### 6.5 Stars
 
-Each run gives 1–3 stars from total score thresholds, plus a "perfect run" badge (no penalties, all stops GREAT or better).
+Each finished run gives 1–3 stars by the passengers' average satisfaction (60% / 75% / 90%), the same on every line, plus a "perfect run" badge (everybody delivered and calm).
 
 ## 7. The street: traffic and hazards
 
@@ -206,7 +215,7 @@ Kept minimal and diegetic where possible.
 
 - Top: **next stop name**, distance to the marker, schedule delta (a departure countdown while at a stop), clock.
 - Speed and current **speed limit** (also as a lineside sign in the world).
-- Comfort meter and score / combo.
+- The passengers (one segment each, by mood) and the comfort meter; the score only at the end.
 - Contextual prompts: junction arrows, "Doors", stop rating popups (PERFECT!), hazard warning icon when something is about to enter the track.
 
 ## 12. Audio
@@ -298,9 +307,9 @@ Progress: Hafenberg Line 4 is done (lifting bridge, tunnel, steep grades, wet ra
 
 1. Final name? (Candidates: *Tram*, *Ding Ding*, *Motorman*, *Next Stop*, *Last Tram*.)
 2. Notched lever only, or offer the continuous mode from the start?
-3. ~~How punishing are fails? Restart the run, or restart from the last stop?~~ **Decided (M1):** after a failed run the player may continue from the last served stop for −1000 points (no perfect-run badge, no stars lost otherwise), or restart the line.
+3. ~~How punishing are fails? Restart the run, or restart from the last stop?~~ **Decided:** an accident ends the run and the next try starts the line again. Mistakes short of an accident cost the passengers' mood, not the run (no derailment).
 4. Should the player ever drive the depot pull-out or a reversing move (stub terminus), or keep everything forward-only?
-5. Passengers as a resource (capacity, crowding) or purely cosmetic plus rating?
+5. ~~Passengers as a resource (capacity, crowding) or purely cosmetic plus rating?~~ **Decided:** every passenger is a person travelling from one stop to another, and their mood is the score (§6.3). Capacity and crowding may come later (rush hour).
 6. ~~Stylised fictional country (consistent signage language and names) – e.g. Central European flavour?~~ **Decided (M1):** a Central European flavour with German-sounding names (Altstadt, Hauptbahnhof, Kornmarkt, Domplatz); UI stays in English.
 7. Monetisation: none (hobby project), or an optional "support" link?
 

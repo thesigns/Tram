@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { LOOKS, SIM, TRAMS, VIEW, WORLD } from './config.js';
+import { LOOKS, PASSENGERS, SIM, TRAMS, VIEW, WORLD } from './config.js';
 import { EB, Tram } from './core/tram.js';
 import { Run } from './core/run.js';
 import { Input } from './core/input.js';
@@ -129,6 +129,7 @@ function disposeWorld(w) {
 const fmtError = (e) => (Math.abs(e) < 0.05 ? 'spot on' : `${Math.abs(e).toFixed(1)} m ${e < 0 ? 'short' : 'past'}`);
 
 function onRunEvent(type, d) {
+  const run = W.run;
   switch (type) {
     case 'rating': {
       if (d.rating === 'EMPTY') {
@@ -136,47 +137,42 @@ function onRunEvent(type, d) {
         break;
       }
       const title = d.rating === 'PERFECT' || d.rating === 'GREAT' ? `${d.rating}!` : d.rating;
-      const mult = d.mult > 1 ? ` ×${d.mult}` : '';
-      hud.showRating(title, `${fmtError(d.error)} · +${d.points}${mult}`, RATING_COLORS[d.rating]);
+      hud.showRating(title, fmtError(d.error) + (d.off ? ` · ${d.off} getting off` : ''), RATING_COLORS[d.rating]);
       sound.rating(d.rating);
       break;
     }
     case 'missed':
-      hud.showRating('MISSED', 'Passengers left waiting', RATING_COLORS.MISSED);
+      hud.showRating('MISSED', 'Nobody could get on or off', RATING_COLORS.MISSED);
       sound.rating('MISSED');
       break;
     case 'skipped':
-      hud.showRating('PASSED', `Nobody to pick up or drop off · +${d.points}`, RATING_COLORS.GREAT);
+      hud.showRating('PASSED', 'Nobody to pick up or drop off', RATING_COLORS.GREAT);
       sound.rating('GOOD');
       break;
     case 'request':
       sound.request();
       hud.showNotice('Stop requested', '#62c4ff', 2);
       break;
-    case 'penalty':
-      hud.showNotice(`${PENALTY_TEXT[d.reason]}  −${d.points}`, '#ff8a70', 2.8);
-      if (d.reason !== 'continue') sound.penalty();
+    case 'notice':
+      hud.showNotice(d.text, d.bad ? '#ff8a70' : '#f8f4e8', 2.8);
+      if (d.bad) sound.penalty();
       break;
     case 'bump':
       sound.bump();
       cam.jolt = 1;
+      hud.showNotice('Collision – the passengers are furious', '#ff8a70', 2.8);
       break;
     case 'departure':
     case 'arrival': {
-      const pts = d.points > 0 ? `+${d.points}` : `−${-d.points}`;
-      const text = d.verdict === 'ON TIME' ? `On time  ${pts}` : `${d.verdict === 'LATE' ? 'Late' : 'Early'} ${formatDelta(d.dev)}  ${pts}`;
+      const text = d.verdict === 'ON TIME' ? 'On time' : `${d.verdict === 'LATE' ? 'Late' : 'Early'} ${formatDelta(d.dev)}`;
       hud.showNotice(text, PUNCT_COLORS[d.verdict], 2.6);
       if (d.verdict !== 'ON TIME') sound.penalty();
       break;
     }
     case 'fail':
-      if (d.reason === 'derail') {
-        hud.showRating('DERAILED', `${Math.round(d.kmh)} km/h in a ${d.limit} km/h curve`, RATING_COLORS.MISSED);
-        sound.derail();
-        cam.crash = 1;
-      } else if (d.reason === 'collision' || d.reason === 'bridge') {
-        hud.showRating(d.reason === 'bridge' ? 'THE BRIDGE IS UP' : 'COLLISION', `${Math.round(d.kmh)} km/h`, RATING_COLORS.MISSED);
-        sound.derail();
+      if (d.reason === 'collision' || d.reason === 'bridge') {
+        hud.showRating('CRASH', d.reason === 'bridge' ? 'The bridge was up' : `${Math.round(d.kmh)} km/h`, RATING_COLORS.MISSED);
+        sound.crash();
         cam.jolt = 1;
       } else {
         // people: no gore – the screen fades out (GDD §6.4)
@@ -188,12 +184,17 @@ function onRunEvent(type, d) {
     case 'bridge':
       if (d.phase === 'warning') hud.showNotice('The bridge is about to lift', '#f2c230', 3);
       if (d.phase === 'made') {
-        hud.showNotice(`Made the bridge  +${d.points}`, '#9fe05e', 2.6);
+        hud.showNotice('Made the bridge', '#9fe05e', 2.2);
         sound.rating('GOOD');
       }
       if (d.phase === 'cleared' && d.excuse > 0) hud.showNotice(`Bridge lift: timetable ${formatDelta(d.excuse)}`, '#62c4ff', 3);
       break;
-    case 'board': W.passengers.board(d.stop, d.k, tramCfg.doors.map((x) => tram.s - x)); break;
+    case 'arrive':
+      W.passengers.arrive(d.person);
+      // somebody running for a tram that is still there
+      if (d.person.from === run.idx || d.person.from === run.departPending) hud.showNotice('Somebody is running for the tram', '#f2c230', 2.6);
+      break;
+    case 'board': W.passengers.board(d.person, tramCfg.doors.map((x) => tram.s - x)); break;
     case 'ready': sound.beep(); break;
     case 'hint': hud.showNotice(d.text, '#f2c230', 1.4); break;
     case 'done': game.endTimer = 1.6; break;
@@ -202,14 +203,6 @@ function onRunEvent(type, d) {
 }
 
 const PUNCT_COLORS = { 'ON TIME': '#9fe05e', LATE: '#ff8a70', EARLY: '#ff8a70' };
-const PENALTY_TEXT = {
-  left: 'Passengers left behind',
-  doorsAway: 'Doors opened away from a platform',
-  red: 'Passed a stop signal',
-  collision: 'Collision',
-  requested: 'Request stop missed',
-  continue: 'Continued from the last stop',
-};
 const fade = $('fade');
 
 // ---------- controls ----------
@@ -234,7 +227,6 @@ function resetView() {
   game.prevS = tram.s;
   game.acc = 0;
   game.endTimer = 0;
-  cam.crash = 0;
   cam.jolt = 0;
   fade.style.opacity = 0;
   sound.lastS = null;
@@ -245,20 +237,10 @@ function startRun() {
   const run = W.run;
   tram.reset(run.stops[0].s);
   run.reset();
-  W.passengers.reset(run.stops);
+  W.passengers.reset(run.crowd);
   resetView();
   setMode('playing');
   hud.showRating(`DEP ${formatClock(run.depAt(0)).slice(0, 5)}`, `Next stop: ${run.target.name}`, '#f8f4e8');
-}
-
-// After a failure: back to the last served stop, for a penalty.
-function continueRun() {
-  sound.init();
-  const run = W.run;
-  run.continueRun(tram);
-  resetView();
-  setMode('playing');
-  hud.showRating('CONTINUE', `From ${run.stops[run.departPending].name}`, '#f8f4e8');
 }
 
 async function chooseLine(def) {
@@ -335,9 +317,8 @@ const RESULT_COLORS = {
   PERFECT: '#1f8a4c', GREAT: '#4f8a1f', GOOD: '#9a7400', OK: '#b5651d', MISSED: '#c8382c', PASSED: '#4f8a1f', EMPTY: '#6b665c',
 };
 const FAIL_TEXT = {
-  derail: (f) => ['DERAILED', `${Math.round(f.kmh)} km/h in a ${f.limit} km/h curve.`],
-  collision: (f) => ['COLLISION', `You hit ${VEHICLE[f.what] ?? 'a car'} at ${Math.round(f.kmh)} km/h.`],
-  bridge: () => ['RUN ENDED', 'You drove onto the lifting bridge while it was up. Stop on the bridge signal.'],
+  collision: (f) => ['YOU CRASHED THE TRAM', `You hit ${VEHICLE[f.what] ?? 'a car'} at ${Math.round(f.kmh)} km/h. The run is over.`],
+  bridge: () => ['YOU CRASHED THE TRAM', 'You drove onto the lifting bridge while it was up. Stop on the bridge signal.'],
   pedestrian: () => ['RUN ENDED', 'You hit a pedestrian. Watch the kerbs, brake early and use the bell.'],
   cyclist: () => ['RUN ENDED', 'You hit a cyclist. Keep your distance and use the bell.'],
 };
@@ -361,7 +342,15 @@ function cell(main, sub, color) {
   return td;
 }
 
-const passengerVerdict = (c) => (c >= 90 ? 'delighted' : c >= 75 ? 'comfortable' : c >= 55 ? 'shaken' : 'seasick');
+// What upset the passengers (crowd.lost), for the results.
+const CAUSES = [
+  ['comfort', 'Rough ride'],
+  ['late', 'Lateness'],
+  ['stopping', 'Walking to the doors'],
+  ['missed', 'Missed stops'],
+  ['left', 'Left on the platform'],
+  ['safety', 'Signals, doors, bumps'],
+];
 const signed = (n) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 
 function showResults() {
@@ -369,16 +358,17 @@ function showResults() {
   sound.suspend();
   const run = W.run;
   const failed = run.phase === 'failed';
+  const sat = run.satisfaction;
   const [title, msg] = failed ? FAIL_TEXT[run.fail.reason](run.fail)
-    : ['END OF THE LINE', `Passengers were ${passengerVerdict(run.comfort.average)}.`];
+    : ['END OF THE LINE', `${Math.round(sat * 100)}% of your passengers are satisfied.`];
   $('res-title').textContent = title;
   $('res-msg').textContent = msg;
 
-  // stars, a new best, the perfect-run badge
+  // stars (by satisfaction), a new best, the perfect-run badge
   const badges = [];
   let stars = 0;
   if (!failed) {
-    stars = starsFor(run.score, W.route.stars);
+    stars = starsFor(sat, W.route.stars ?? PASSENGERS.stars);
     const rec = recordRun(progress, W.def.id, run.score, stars, run.perfect);
     if (rec.best) badges.push('NEW BEST');
     if (run.perfect) badges.push('PERFECT RUN');
@@ -395,38 +385,31 @@ function showResults() {
     const start = r.rating === 'START';
     tr.appendChild(cell(start ? '–' : r.rating, start ? '' : ROW_NOTE[r.rating] ?? fmtError(r.error), RESULT_COLORS[r.rating]));
     tr.appendChild(r.punct ? cell(formatDelta(r.dev), r.punct.toLowerCase(), RESULT_PUNCT[r.punct]) : cell('–'));
-    tr.appendChild(cell(signed(r.points + r.punctPoints)));
+    tr.appendChild(cell(r.on || r.off ? `+${r.on} −${r.off}` : '–', r.left ? `${r.left} left behind` : '', r.left ? '#c8382c' : undefined));
     body.appendChild(tr);
   }
 
-  const p = run.pts;
   const dl = $('res-breakdown');
   dl.replaceChildren();
-  const items = [
-    ['Stops', p.stops],
-    ['Punctuality', p.punctuality],
-    [`Comfort (average ${Math.round(run.comfort.average)}%)`, p.comfort],
-    ['Overspeed', p.overspeed],
-    ['Penalties', p.penalties],
-    ...(p.bonus ? [['Bonuses', p.bonus]] : []),
-    ...(run.continueCost ? [[`Continues (${run.continues})`, -run.continueCost]] : []),
-  ];
+  const c = run.crowd.counts();
+  const items = [[`Passengers (${run.crowd.people.length})`, `${c.green} happy · ${c.yellow} annoyed · ${c.red} furious`]];
+  for (const [key, label] of CAUSES) {
+    const lost = run.crowd.lost[key];
+    if (lost) items.push([label, signed(-Math.round(lost * PASSENGERS.points))]);
+  }
   for (const [label, value] of items) {
     const dt = document.createElement('dt');
     dt.textContent = label;
     const dd = document.createElement('dd');
-    dd.textContent = signed(value);
+    dd.textContent = value;
     dl.append(dt, dd);
   }
   dl.classList.toggle('hidden', failed);
   $('res-score-line').classList.toggle('hidden', failed);
   $('res-score').textContent = run.score;
   const t = Math.round(run.time);
-  $('res-meta').textContent = `${W.def.city} · ${W.def.name} · time ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')} · best combo ×${run.bestCombo}`;
-  const cont = $('continue-btn');
-  cont.classList.toggle('hidden', !run.canContinue);
-  if (run.canContinue) cont.textContent = `CONTINUE FROM ${run.stops[run.checkpoint.served].name.toUpperCase()}  −1000`;
-  $('again-btn').textContent = failed ? 'RESTART LINE' : 'DRIVE AGAIN';
+  $('res-meta').textContent = `${W.def.city} · ${W.def.name} · time ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  $('again-btn').textContent = failed ? 'TRY AGAIN' : 'DRIVE AGAIN';
 }
 
 // ---------- camera ----------
@@ -436,7 +419,7 @@ const _e = new THREE.Euler(0, 0, 0, 'YXZ');
 const bodyQ = new THREE.Quaternion();
 const _inv = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
-const cam = { lean: 0, roll: 0, t: 0, crash: 0, jolt: 0, grade: 0 };
+const cam = { lean: 0, roll: 0, t: 0, jolt: 0, grade: 0 };
 
 const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -453,11 +436,9 @@ function updateCamera(s, dt) {
   // the view follows hills smoothly; lean back when accelerating, forward when braking; sway in curves
   cam.grade = dt > 0 ? damp(cam.grade, track.slope(eyeS - 8, eyeS + 4), 3, dt) : track.slope(eyeS - 8, eyeS + 4);
   cam.lean = damp(cam.lean, clamp(tram.a * 0.008, -0.025, 0.02), 4, dt);
-  // derailment: the body lurches to the outside of the curve and shakes until it stops
-  const curve = run.curve;
-  const lurch = cam.crash > 0 ? 0.12 * (curve ? -curve.dir : 1) : 0;
-  cam.roll = damp(cam.roll, clamp(-_a.k * tram.v * tram.v * 0.02, -0.02, 0.02) + lurch, 3, dt);
-  const amp = 0.0006 * clamp(tram.v / 14, 0, 1.2) + (tram.halted && tram.v > 0 ? 0.02 : 0);
+  cam.roll = damp(cam.roll, clamp(-_a.k * tram.v * tram.v * 0.02, -0.03, 0.03), 3, dt);
+  // too fast, the tram shakes; a crashed tram grinds to a halt
+  const amp = 0.0006 * clamp(tram.v / 14, 0, 1.2) + run.rough * 0.005 + (tram.halted && tram.v > 0 ? 0.02 : 0);
   const bob = (Math.sin(cam.t * 31) + Math.sin(cam.t * 17.3)) * amp;
   // a collision throws the view forward and down for a moment
   cam.jolt = Math.max(0, cam.jolt - dt * 2.5);
@@ -581,7 +562,6 @@ function frame(now) {
 
 // ---------- UI ----------
 $('again-btn').addEventListener('click', startRun);
-$('continue-btn').addEventListener('click', continueRun);
 $('resume-btn').addEventListener('click', () => setMode('playing'));
 $('restart-btn').addEventListener('click', startRun);
 for (const id of ['lines-btn', 'pause-lines-btn']) $(id).addEventListener('click', () => setMode('menu'));

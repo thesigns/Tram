@@ -110,14 +110,14 @@ canvas#hud { pointer-events: none; }
   position: absolute;
   left: max(10px, env(safe-area-inset-left));
   bottom: max(14px, calc(env(safe-area-inset-bottom) + 8px));
-  width: 136px;
+  width: 150px;             /* as wide as the lever */
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 .ctl {
-  height: 54px;
-  font: 700 18px var(--font);
+  height: 96px;             /* doors and bell the same size */
+  font: 700 20px var(--font);
   letter-spacing: 1px;
   color: var(--hud);
   background: rgba(22, 24, 26, 0.62);
@@ -126,7 +126,6 @@ canvas#hud { pointer-events: none; }
   touch-action: none;
   cursor: pointer;
 }
-.ctl-doors { height: 84px; font-size: 20px; }
 .ctl.pressed { transform: scale(0.96); background: rgba(80, 84, 88, 0.85); }
 #doors-btn .open-label { display: none; }
 #doors-btn.open { border-color: #ffb020; color: #ffb020; }
@@ -222,8 +221,7 @@ table.res th:last-child, table.res td:last-child { text-align: right; }
   .card h1 { font-size: 44px; }
   .btn { padding: 8px; margin: 6px 0; font-size: 20px; }
   #lever { height: min(calc(100vh - 80px), 280px); }
-  .ctl { height: 46px; }
-  .ctl-doors { height: 70px; }
+  .ctl { height: 84px; }
 }
 
 #loading {

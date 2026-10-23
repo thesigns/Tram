@@ -1,7 +1,7 @@
 // Career progress (GDD §9, §14.5): best score, stars and the perfect-run badge per line, in localStorage.
 // Storage can be unavailable (private mode, blocked site data): everything still works, nothing is kept.
 
-const KEY = 'tram.progress.v1';
+const KEY = 'tram.progress.v2';   // v2: scores are passenger satisfaction
 
 export function loadProgress() {
   try {
@@ -15,8 +15,8 @@ function save(p) {
   try { localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* storage unavailable */ }
 }
 
-// 0–3 stars for a finished run's score.
-export const starsFor = (score, thresholds) => thresholds.filter((t) => score >= t).length;
+// 0–3 stars for a finished run: its satisfaction (0–1) against the thresholds.
+export const starsFor = (value, thresholds) => thresholds.filter((t) => value >= t).length;
 
 export const totalStars = (p) => Object.values(p.lines).reduce((n, l) => n + (l.stars ?? 0), 0);
 

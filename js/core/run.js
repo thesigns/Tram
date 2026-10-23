@@ -1,13 +1,15 @@
-import { BRIDGE, COMFORT, LIMITS, LOOKS, PHYSICS, STOPS, STREET, TIMETABLE } from '../config.js';
+import { COMFORT, LIMITS, LOOKS, PASSENGERS, PHYSICS, STOPS, STREET, TIMETABLE } from '../config.js';
 import { Comfort } from './comfort.js';
+import { Crowd } from './crowd.js';
 import { Street } from './street.js';
 import { buildTimetable } from './timetable.js';
-import { mulberry32 } from './utils.js';
+import { clamp, mulberry32 } from './utils.js';
 
-// One run along a route: precision stops, doors, boarding, speed limits, comfort, timetable, the street
-// and the score (GDD §6, §7). stops[0] is where the run starts (doors closed, departure due); the last
-// stop is the terminus. After a failure the run can continue from the last served stop (a checkpoint).
-// Events go out through emit(type, data): rating, missed, skipped, request, penalty, board, ready,
+// One run along a route: precision stops, doors, boarding, speed limits, comfort, the timetable, the street
+// and the passengers (GDD §6, §7). stops[0] is where the run starts (doors closed, departure due); the last
+// stop is the terminus. The score is the passengers' satisfaction at the end of the line (js/core/crowd.js);
+// an accident ends the run.
+// Events go out through emit(type, data): rating, missed, skipped, request, notice, board, arrive, ready,
 // departure, arrival, bump, fail, done, hint, bridge.
 export class Run {
   constructor(route, tramCfg, track, limits, emit) {
@@ -18,18 +20,16 @@ export class Run {
     this.stops = route.stops.map((st, i) => {
       const end = st.s + STOPS.markerFromEnd;
       const last = i === route.stops.length - 1;
-      const waiting = i === 0 || last ? 0 : 2 + Math.floor(rnd() * 6);
       return {
+        index: i,
         name: st.name,
         s: st.s,
         dep: st.dep,
         request: !!st.request && i > 0 && !last,
         start: end - STOPS.platformLength,
         end,
-        baseWaiting: waiting,   // passengers built for this stop (and assumed by the timetable)
-        waiting,                // passengers actually waiting in this run
-        alight: false,          // request stop: somebody inside wants to get off
-        requestAt: st.s,        // … and presses the button when the tram passes this point
+        baseWaiting: i === 0 || last ? 0 : 2 + Math.floor(rnd() * 6),   // people built here (the timetable assumes them)
+        requestAt: st.s,        // somebody inside presses the stop button when the tram passes this point
       };
     });
     this.timetable = buildTimetable(track, limits, this.stops, tramCfg, route);
@@ -37,28 +37,22 @@ export class Run {
     const roadHalf = LOOKS[route.look ?? 'modern'].roadHalf;
     this.street = new Street(route, track, this.timetable, tramCfg.length, roadHalf, (type, d) => this.streetEvent(type, d));
     this.comfort = new Comfort();
+    this.crowd = new Crowd(this.stops);
     this.reset();
   }
 
-  // seed: hazards and request stops differ from run to run
+  // seed: hazards, passengers and request stops differ from run to run
   reset(seed = Math.floor(Math.random() * 2 ** 31)) {
     this.seed = seed;
-    this.continues = 0;
-    this.continueCost = 0;      // kept outside the checkpoints, so every continue costs
     this.idx = 1;               // target stop
     this.phase = 'drive';       // drive | board | ready | done | failed
-    this.pts = { stops: 0, punctuality: 0, comfort: 0, overspeed: 0, penalties: 0, bonus: 0 };
-    this.shift = 0;             // the timetable moved by an excused bridge lift [game s]
-    this.bridgeDelta = 0;       // the delay when the bridge warning started
-    this.combo = 0;
-    this.bestCombo = 0;
     this.time = 0;              // real seconds since the start
-    this.boarded = 0;
     this.boardTimer = 0;
+    this.alightWait = 0;
     this.departPending = 0;     // the stop the tram stands at, served, until it moves off
     this.limit = this.limits.at(this.stops[0].s);
     this.overspeed = 0;         // km/h above the limit (negative = under)
-    this.overAcc = 0;
+    this.rough = 0;             // 0–1: how hard the tram shakes from going too fast
     this.curve = null;          // the tightest curve under the tram
     this.lateral = 0;           // lateral acceleration [m/s²]
     this.delta = 0;             // behind schedule [game s], > 0 = late
@@ -67,72 +61,28 @@ export class Run {
     this.prevS = this.stops[0].s;
     this.lastBell = -Infinity;
     this.stopRequested = false;
+    this.shift = 0;             // the timetable moved by an excused bridge lift [game s]
+    this.bridgeDelta = 0;       // the delay when the bridge warning started
     this.comfort.reset();
 
     const rnd = mulberry32(seed);
-    for (const st of this.stops) {
-      st.waiting = st.baseWaiting;
-      st.alight = false;
-      if (!st.request) continue;
-      if (rnd() < STOPS.requestEmpty) st.waiting = 0;
-      else if (rnd() < STOPS.requestAlight) { st.alight = true; st.waiting = rnd() < 0.5 ? st.baseWaiting : 0; }
-      st.requestAt = st.s - 130 - rnd() * 80;
-    }
+    for (const st of this.stops) if (st.request) st.requestAt = st.s - 130 - rnd() * 80;
     this.street.reset(seed);
+    this.crowd.reset(seed, this.timetable);
 
-    // per stop: { name, rating, error, points, dev, punct, punctPoints }
-    this.results = [{ stop: 0, name: this.stops[0].name, rating: 'START', error: null, points: 0, dev: null, punct: null, punctPoints: 0 }];
-    this.byStop = { 0: this.results[0] };
-    this.checkpoint = this.snapshot();
+    // per stop: { stop, name, rating, error, dev, punct, on, off, left }
+    this.results = [];
+    this.byStop = {};
+    this.record(0, { rating: 'START', error: null });
   }
 
-  // Everything needed to continue from the stop the tram stands at, served, doors closed.
-  snapshot() {
-    const c = this.comfort;
-    return {
-      idx: this.idx, served: this.departPending, time: this.time, combo: this.combo, bestCombo: this.bestCombo,
-      shift: this.shift, pts: { ...this.pts }, results: this.results.map((r) => ({ ...r })),
-      comfort: { value: c.value, sum: c.sum, time: c.time },
-    };
-  }
+  get score() { return this.crowd.score; }
+  get satisfaction() { return this.crowd.satisfaction; }
 
-  get canContinue() { return this.phase === 'failed' && !!this.checkpoint; }
-
-  // Back to the last served stop after a failure, for a penalty (GDD §17, question 3).
-  continueRun(tram) {
-    const c = this.checkpoint;
-    Object.assign(this, {
-      idx: c.idx, departPending: c.served, time: c.time, combo: c.combo, bestCombo: c.bestCombo, shift: c.shift,
-      phase: 'drive', fail: null, overAcc: 0, stopRequested: false, curve: null, lateral: 0, delta: 0,
-    });
-    this.pts = { ...c.pts };
-    this.results = c.results.map((r) => ({ ...r }));
-    this.byStop = Object.fromEntries(this.results.map((r) => [r.stop, r]));
-    Object.assign(this.comfort, c.comfort, { recent: 0, lastNotch: 0 });
-    const s = this.stops[c.served].s;
-    tram.reset(s);
-    this.prevS = s;
-    this.limit = this.limits.at(s);
-    this.countdown = this.depAt(c.served) - this.clock;
-    this.street.reset(this.seed);
-    this.street.time = this.time;
-    this.street.lag = this.shift / TIMETABLE.timeScale;
-    this.continues++;
-    this.continueCost += STOPS.continuePenalty;
-    this.emit('penalty', { reason: 'continue', points: STOPS.continuePenalty });
-  }
-
-  // No penalties, no overspeed, no continues, every stop GREAT or better (or rightly passed), always on time.
+  // Everybody delivered and (nearly) nobody upset.
   get perfect() {
-    const p = this.pts;
-    return this.phase === 'done' && this.continues === 0 && p.penalties === 0 && p.overspeed === 0
-      && this.results.length === this.stops.length
-      && this.results.every((r) => ['START', 'PERFECT', 'GREAT', 'PASSED'].includes(r.rating) && (!r.punct || r.punct === 'ON TIME'));
-  }
-
-  get score() {
-    const p = this.pts;
-    return p.stops + p.punctuality + p.comfort + p.overspeed + p.penalties + p.bonus - this.continueCost;
+    return this.phase === 'done'
+      && this.crowd.people.every((p) => p.state === 'done' && this.crowd.anger(p) <= PASSENGERS.perfect);
   }
 
   get target() { return this.stops[this.idx] ?? null; }
@@ -161,7 +111,9 @@ export class Run {
   }
 
   // Does anybody need this stop? (Only request stops can be passed.)
-  needed(st) { return !st.request || st.waiting > 0 || st.alight; }
+  needed(st) {
+    return !st.request || this.crowd.waitingAt(st.index, this.sched).length > 0 || this.crowd.ridersTo(st.index).length > 0;
+  }
 
   // Distance from the tram front to the target marker (negative = overshoot).
   distance(s) { return this.target ? this.target.s - s : 0; }
@@ -174,20 +126,20 @@ export class Run {
     return this.tramCfg.doors.every((d) => s - d - m >= stop.start && s - d + m <= stop.end);
   }
 
+  // Anger for everybody aboard.
+  upsetRiders(amount, cause) {
+    for (const p of this.crowd.riders) this.crowd.upset(p, amount, cause);
+  }
+
   // The doors button: open at standstill (rated at the target platform), or close.
   pressDoors(tram) {
     if (this.over) return;
     if (tram.doorsTarget === 1) {
       tram.setDoors(false);
       if (this.phase === 'board' || this.phase === 'ready') {
-        if (this.phase === 'board' && this.target.waiting - this.boarded > 0) {
-          this.penalty('left', STOPS.penaltyLeftBehind);
-          this.comfort.hit(COMFORT.doorsSlam);
-        }
         const served = this.idx;
         this.next();
         this.departPending = served;
-        if (this.phase !== 'done') this.checkpoint = this.snapshot();
       }
       return;
     }
@@ -197,7 +149,8 @@ export class Run {
     if (this.doorsOnPlatform(this.target, tram.s)) {
       this.rate(tram.s);
     } else if (!this.stops.some((st) => this.doorsOnPlatform(st, tram.s))) {
-      this.penalty('doorsAway', STOPS.penaltyDoorsAway);
+      this.upsetRiders(PASSENGERS.doorsAway, 'safety');
+      this.emit('notice', { text: 'Doors opened away from a platform', bad: true });
     }
   }
 
@@ -209,60 +162,45 @@ export class Run {
     this.street.bell(tram);
   }
 
+  // Doors open at the target platform: the stop is rated, the riders for this stop get off.
   rate(s) {
-    const st = this.target;
+    const st = this.target, i = this.idx;
     const error = s - st.s;
     this.phase = 'board';
-    this.boarded = 0;
     this.boardTimer = 0;
     if (!this.needed(st)) {
-      // an empty request stop: no harm done, but no points either
-      this.record({ name: st.name, rating: 'EMPTY', error, points: 0 });
-      this.emit('rating', { stop: this.idx, rating: 'EMPTY', error, points: 0, mult: 1 });
+      // an empty request stop: no harm done, but time lost
+      this.record(i, { rating: 'EMPTY', error });
+      this.emit('rating', { stop: i, rating: 'EMPTY', error, off: 0 });
+      this.alightWait = 0;
       return;
     }
     const r = STOPS.ratings.find((x) => Math.abs(error) <= x.max);
     const rating = r ? r.name : 'OK';
-    const base = r ? r.points : STOPS.okPoints;
-    this.combo = rating === 'PERFECT' || rating === 'GREAT' ? this.combo + 1 : 0;
-    this.bestCombo = Math.max(this.bestCombo, this.combo);
-    const mult = this.combo >= 2 ? Math.min(STOPS.comboMax, 1 + STOPS.comboStep * (this.combo - 1)) : 1;
-    const points = Math.round(base * mult);
-    this.pts.stops += points;
-    this.record({ name: st.name, rating, error, points });
-    this.emit('rating', { stop: this.idx, rating, error, points, mult });
-    if (this.terminus) this.punctuality(this.idx, this.sched - this.timetable.arr[this.idx], true);
+    const off = this.terminus ? this.crowd.riders : this.crowd.ridersTo(i);
+    // the people getting on and off here walk less or more to the doors
+    for (const p of [...off, ...this.crowd.waitingAt(i, this.sched)]) this.crowd.upset(p, PASSENGERS.stop[rating], 'stopping');
+    for (const p of off) p.state = 'done';
+    this.alightWait = off.length ? 1 : 0;
+    this.record(i, { rating, error, off: off.length });
+    this.emit('rating', { stop: i, rating, error, off: off.length });
+    if (this.terminus) this.punctuality(i, this.sched - this.timetable.arr[i], true);
   }
 
-  record(r) {
-    const row = { stop: this.idx, dev: null, punct: null, punctPoints: 0, ...r };
+  record(i, r) {
+    const row = { stop: i, name: this.stops[i].name, dev: null, punct: null, on: 0, off: 0, left: 0, ...r };
     this.results.push(row);
-    this.byStop[this.idx] = row;
+    this.byStop[i] = row;
   }
 
-  // Departure from a stop (or arrival at the terminus) against the timetable.
+  // Departure from a stop (or arrival at the terminus) against the timetable – the passengers feel it
+  // (crowd.update); this is the verdict for the HUD and the results.
   punctuality(stop, dev, arrival) {
     const T = TIMETABLE;
-    let verdict, points;
-    if (!arrival && dev < -T.earlyTolerance) {
-      verdict = 'EARLY';
-      points = -T.earlyPenalty;
-    } else if (dev <= T.lateTolerance) {
-      verdict = 'ON TIME';
-      points = T.onTimePoints;
-    } else {
-      verdict = 'LATE';
-      points = -Math.min(T.lateMax, Math.round(T.latePerSecond * (dev - T.lateTolerance)));
-    }
-    this.pts.punctuality += points;
+    const verdict = !arrival && dev < -T.earlyTolerance ? 'EARLY' : dev <= T.lateTolerance ? 'ON TIME' : 'LATE';
     const row = this.byStop[stop];
-    if (row) Object.assign(row, { dev, punct: verdict, punctPoints: points });
-    this.emit(arrival ? 'arrival' : 'departure', { stop, dev, verdict, points });
-  }
-
-  penalty(reason, points) {
-    this.pts.penalties -= points;
-    this.emit('penalty', { reason, points });
+    if (row) Object.assign(row, { dev, punct: verdict });
+    this.emit(arrival ? 'arrival' : 'departure', { stop, dev, verdict });
   }
 
   next() {
@@ -270,12 +208,12 @@ export class Run {
     this.stopRequested = false;
     this.phase = this.idx < this.stops.length ? 'drive' : 'done';
     if (this.phase === 'done') {
-      this.pts.comfort = Math.round(this.comfort.average * COMFORT.bonus);
+      for (const p of this.crowd.riders) p.state = 'done';
       this.emit('done', {});
     }
   }
 
-  // The run ends early: derailment, or hitting a person or a car at speed.
+  // The run ends: an accident (a person, a car at speed, the open bridge).
   failRun(tram, reason, extra = {}) {
     this.phase = 'failed';
     tram.halted = true;
@@ -286,11 +224,13 @@ export class Run {
   streetEvent(type, d) {
     const tram = this.tram;
     if (this.over) return;
-    if (type === 'red') this.penalty('red', STREET.penaltyRed);
+    if (type === 'red') {
+      this.upsetRiders(PASSENGERS.signal, 'safety');
+      this.emit('notice', { text: d.signal === this.street.bridge ? 'Passed the bridge signal' : 'Passed a stop signal', bad: true });
+    }
     if (type === 'fall') this.failRun(tram, 'bridge');
     if (type === 'bridge') {
       if (d.phase === 'warning') this.bridgeDelta = this.sched - this.timetable.at(tram.s);
-      if (d.phase === 'made') this.pts.bonus += BRIDGE.bonus;
       if (d.phase === 'cleared') {
         // the delay the lift caused doesn't count: the timetable (and the green wave) moves with it
         const excuse = Math.max(0, Math.round(this.sched - this.timetable.at(d.line) - this.bridgeDelta));
@@ -298,7 +238,7 @@ export class Run {
         this.street.lag = this.shift / TIMETABLE.timeScale;
         d = { ...d, excuse };
       }
-      this.emit('bridge', { ...d, points: BRIDGE.bonus });
+      this.emit('bridge', d);
     }
     if (type === 'collision') {
       const kind = d.agent.kind;
@@ -306,7 +246,7 @@ export class Run {
       else if (tram.v * 3.6 > STREET.fatalSpeed) this.failRun(tram, 'collision', { what: kind });
       else {
         // a bump: the tram stops dead, the passengers are not amused
-        this.penalty('collision', STREET.penaltyCollision);
+        this.upsetRiders(PASSENGERS.bump, 'safety');
         this.comfort.hit(STREET.collisionComfort);
         tram.v = 0;
         this.emit('bump', {});
@@ -320,34 +260,32 @@ export class Run {
     this.time += dt;
     const v = tram.v;
 
-    // speed limits: points lost for every second over the limit (+ tolerance)
+    // too fast: over the limit the tram shakes, in a curve it lurches – the comfort falls (no derailing)
     this.limit = this.limits.at(tram.s);
     this.overspeed = v * 3.6 - this.limit;
-    if (this.overspeed > LIMITS.tolerance) {
-      this.overAcc += LIMITS.overspeedRate * dt;
-      const whole = Math.floor(this.overAcc);
-      this.overAcc -= whole;
-      this.pts.overspeed -= whole;
-    }
-
-    // curves: discomfort above the design lateral acceleration, derailment far above the safe speed
     this.curve = this.limits.curveAt(tram.s);
     this.lateral = this.curve ? (v * v) / this.curve.radius : 0;
-    if (this.curve && v > this.curve.safe * LIMITS.derail) {
-      this.failRun(tram, 'derail', { limit: this.curve.kmh });
-      return;
-    }
+    const over = this.overspeed - LIMITS.tolerance;
+    this.rough = clamp(Math.max(0, over) / 20 + Math.max(0, this.lateral - COMFORT.lateralFree) / 2, 0, 1);
 
     // the street: signals, traffic, hazards, collisions
     this.street.update(dt, tram, this.prevS);
     this.prevS = tram.s;
     if (this.over) return;
-    this.comfort.update(dt, tram, this.lateral);
+    this.comfort.update(dt, tram, this.lateral, over);
+    this.crowd.update(dt, this.sched, this.timetable, this.comfort.value);
+    for (const p of this.crowd.arrivals(this.sched)) this.emit('arrive', { person: p });
 
-    // departure = the first movement after a served stop
-    if (this.departPending !== null && tram.v > 0) {
+    // departure = the first movement after a served stop; whoever is still on the platform stays there
+    if (this.departPending !== null && v > 0) {
       const i = this.departPending;
       this.departPending = null;
+      const left = this.crowd.people.filter((p) => p.state === 'waiting' && p.from === i);
+      for (const p of left) this.crowd.strand(p, 'left');
+      if (left.length) {
+        this.byStop[i].left = left.length;
+        this.emit('notice', { text: `${left.length} left behind on the platform`, bad: true });
+      }
       this.punctuality(i, this.sched - this.timetable.dep[i], false);
     }
     // countdown while standing at a stop, otherwise the live delta along the reference profile
@@ -359,41 +297,53 @@ export class Run {
     const st = this.target;
     if (this.phase === 'drive') {
       // somebody inside presses the stop button
-      if (st.alight && !this.stopRequested && tram.s >= st.requestAt) {
+      if (st.request && !this.stopRequested && tram.s >= st.requestAt && this.crowd.ridersTo(this.idx).length) {
         this.stopRequested = true;
         this.emit('request', {});
       }
       // the front door can no longer be on the platform: passed (forward only, no reversing)
       if (tram.s - st.s > this.missDistance(st)) {
         if (!this.needed(st)) {
-          this.pts.stops += STOPS.requestSkipPoints;
-          this.record({ name: st.name, rating: 'PASSED', error: null, points: STOPS.requestSkipPoints });
-          this.emit('skipped', { stop: this.idx, points: STOPS.requestSkipPoints });
+          this.record(this.idx, { rating: 'PASSED', error: null });
+          this.emit('skipped', { stop: this.idx });
         } else {
-          this.combo = 0;
-          this.record({ name: st.name, rating: 'MISSED', error: tram.s - st.s, points: 0 });
+          // carried past their stop: they get off at the next one; the people waiting stay behind
+          for (const p of this.crowd.ridersTo(this.idx)) {
+            this.crowd.upset(p, PASSENGERS.missed, 'missed');
+            p.to = Math.min(this.idx + 1, this.stops.length - 1);
+          }
+          const left = this.crowd.people.filter((p) => p.state === 'waiting' && p.from === this.idx);
+          for (const p of left) this.crowd.strand(p, 'missed');
+          this.record(this.idx, { rating: 'MISSED', error: tram.s - st.s, left: left.length });
           this.emit('missed', { stop: this.idx });
-          if (st.request) this.penalty('requested', STOPS.requestMissPenalty);
         }
         this.next();
       }
-      return;
     }
 
-    if (this.phase === 'board' && tram.doors === 1) {
-      this.boardTimer += dt;
-      if (this.terminus) {
-        if (this.boardTimer >= STOPS.alightTime) this.next();
-        return;
+    // boarding while the doors are open at a stop: at the target (board, ready) or, doors opened
+    // again, at the stop just served – latecomers can still make it
+    const boardAt = this.phase === 'board' || this.phase === 'ready' ? this.idx
+      : this.departPending !== null && this.doorsOnPlatform(this.stops[this.departPending], tram.s) ? this.departPending : null;
+    if (boardAt === null || tram.doors < 1) return;
+    this.boardTimer += dt;
+    if (this.phase === 'board' && this.terminus) {
+      if (this.boardTimer >= STOPS.alightTime) this.next();
+      return;
+    }
+    const queue = this.crowd.waitingAt(boardAt, this.sched);
+    if (queue.length) {
+      if (this.phase === 'ready') this.phase = 'board';
+      if (this.boardTimer >= STOPS.boardInterval) {
+        const p = queue[0];
+        p.state = 'riding';
+        this.byStop[boardAt].on++;
+        this.boardTimer = 0;
+        this.emit('board', { stop: boardAt, person: p });
       }
-      while (this.boarded < st.waiting && this.boardTimer >= (this.boarded + 1) * STOPS.boardInterval) {
-        this.emit('board', { stop: this.idx, k: this.boarded });
-        this.boarded++;
-      }
-      if (this.boardTimer >= st.waiting * STOPS.boardInterval + STOPS.boardExtra + (st.alight ? 1 : 0)) {
-        this.phase = 'ready';
-        this.emit('ready', {});
-      }
+    } else if (this.phase === 'board' && this.boardTimer >= STOPS.boardExtra + this.alightWait) {
+      this.phase = 'ready';
+      this.emit('ready', {});
     }
   }
 }

@@ -11,7 +11,7 @@ export const PHYSICS = {
   effortTau: 0.35,      // build-up time constant of traction and the service brake [s]
   ebTau: 0.15,          // build-up time constant of the emergency brake [s]
   doorTime: 1.6,        // doors fully open / fully closed [s]
-  haltDecel: 5,         // a derailed or crashed tram grinds to a halt [m/s²]
+  haltDecel: 5,         // a crashed tram grinds to a halt [m/s²]
   // adhesion (GDD §5): on wet rails a service brake or power above the grip slides or slips the wheels,
   // which then transmit only slideFactor of it; the emergency brake's magnetic track brakes don't need grip
   wetGrip: 1.1,         // [m/s²] – B3, B4 and P4 from a standstill are too much
@@ -22,22 +22,44 @@ export const LIMITS = {
   lineSpeed: 50,        // when the route doesn't set one [km/h]
   aLat: 0.7,            // lateral acceleration curves are signed for [m/s²]: v_safe = √(aLat · R)
   step: 5,              // curve limits are rounded down to this [km/h]
-  derail: 1.4,          // derailment above this multiple of the safe curve speed (GDD §5)
-  tolerance: 2,         // overspeed is penalized above limit + tolerance [km/h]
-  overspeedRate: 20,    // points per second of overspeed
+  tolerance: 2,         // over limit + tolerance the ride gets rough (COMFORT.overspeed) [km/h]
   warnAhead: 220,       // the HUD announces a lower limit this far ahead [m]
 };
 
-// Passenger comfort 0–100 (GDD §6.3).
+// Ride comfort 0–100 (GDD §6.3): how the ride feels right now. It falls fast and recovers within
+// seconds; what stays is the passengers' anger (PASSENGERS).
 export const COMFORT = {
   jerkFree: 1,          // jerk passengers don't mind [m/s³]
   jerk: 5,              // comfort lost per m/s² of acceleration change above that
   lateralFree: 0.7,     // lateral acceleration passengers don't mind [m/s²] (= LIMITS.aLat)
-  lateral: 25,          // comfort lost per second per m/s² of lateral acceleration above that
+  lateral: 25,          // comfort lost per second per m/s² of lateral acceleration above that (a curve too fast)
+  overspeed: 0.6,       // per second per km/h over the limit + tolerance: the tram shakes (less than in a curve)
   emergency: 10,        // pulling the emergency brake
-  doorsSlam: 10,        // doors closed on boarding passengers
-  recover: 0.4,         // per second of smooth riding
-  bonus: 10,            // end of run: points per percent of average comfort
+  recover: 8,           // per second of smooth riding
+};
+
+// Everybody who rides the line (GDD §6.3): each passenger travels from one stop to another and has an
+// anger 0 (calm) … 1 (furious). The score is their satisfaction, 1 − anger, at the end of the line.
+export const PASSENGERS = {
+  onBoard: [5, 9],      // already aboard at the first stop
+  latecomer: 0.15,      // chance that somebody arrives at the platform only just before the departure
+  yellow: 0.4,          // HUD colours: annoyed from here …
+  red: 0.8,             // … furious from here
+  // a rough ride angers the riders – this part fades again on a smooth ride
+  comfortCalm: 75,      // below this comfort …
+  comfortRate: 0.04,    // … up to this per second (at comfort 0)
+  calmAbove: 90,        // above this comfort …
+  calmDown: 0.01,       // … the comfort part fades by this per second
+  late: 0.002,          // per game second late (beyond TIMETABLE.lateTolerance) at their stop: waiting or riding to it
+  // stopping on the marker: the people getting on and off there walk less or more to the doors
+  stop: { PERFECT: -0.05, GREAT: 0, GOOD: 0.04, OK: 0.1 },
+  missed: 0.5,          // carried past their stop (they get off at the next one)
+  signal: 0.12,         // the riders, when the tram passes a stop signal
+  doorsAway: 0.05,      // the riders, when the doors open away from a platform
+  bump: 0.4,            // the riders, in a minor collision
+  points: 100,          // score per passenger, times their satisfaction
+  perfect: 0.05,        // the perfect-run badge: everybody delivered, nobody angrier than this
+  stars: [0.6, 0.75, 0.9],   // average satisfaction for 1–3 stars
 };
 
 // Timetable (GDD §6.2). Times are game seconds; the game clock runs timeScale × faster than real time.
@@ -52,10 +74,6 @@ export const TIMETABLE = {
   round: 15,            // departures are rounded up to this [game s]
   earlyTolerance: 5,    // on time = from 0:05 early …
   lateTolerance: 30,    // … to 0:30 late [game s]
-  onTimePoints: 300,
-  earlyPenalty: 400,
-  latePerSecond: 4,     // per game second beyond the tolerance
-  lateMax: 400,
 };
 
 // Deceleration per notch (GDD §5): service brake B1–B4 and the emergency brake [m/s²].
@@ -87,25 +105,17 @@ export const STOPS = {
   doorMargin: 0.6,        // a door counts as "on the platform" with this much platform on both sides
   // rating by |error| of the tram front vs. the marker [m] (GDD §6.1); doors on the platform otherwise = OK
   ratings: [
-    { max: 0.5, name: 'PERFECT', points: 1000 },
-    { max: 1.5, name: 'GREAT', points: 700 },
-    { max: 3, name: 'GOOD', points: 400 },
+    { max: 0.5, name: 'PERFECT' },
+    { max: 1.5, name: 'GREAT' },
+    { max: 3, name: 'GOOD' },
   ],
-  okPoints: 150,
-  comboStep: 0.25,        // +25% per consecutive PERFECT/GREAT stop
-  comboMax: 2,
   boardInterval: 0.6,     // one passenger boards every … [s]
   boardExtra: 1.2,        // after the last one
   alightTime: 2,          // terminus: everybody gets off
-  penaltyDoorsAway: 200,
-  penaltyLeftBehind: 150,
   precisionRange: 20,     // the HUD switches to the precision bar this close to the marker
   // request stops (GDD §6.1): sometimes nobody gets on or off – the tram may pass through
   requestEmpty: 0.5,      // chance that nobody needs the stop
-  requestAlight: 0.5,     // otherwise: chance that it's somebody inside pressing the button
-  requestSkipPoints: 400, // passing an empty request stop
-  requestMissPenalty: 300, // passing a request stop somebody needed
-  continuePenalty: 1000,  // continuing from the last served stop after a failed run
+  requestInside: 0.5,     // otherwise: chance that nobody waits – only somebody inside presses the button
 };
 
 // The street: signals, traffic and hazards (GDD §7).
@@ -114,8 +124,6 @@ export const STREET = {
   crossHalf: 6,           // cross street half-width [m]
   stopLineBack: 10,       // the tram stop line is this far before the intersection centre [m]
   signal: { cycle: 36, go: 18, prepare: 5 },   // tram signal timing [real s]; prepare = "about to change"
-  penaltyRed: 500,        // passing the stop line on a stop aspect
-  penaltyCollision: 500,  // minor collision with a car
   fatalSpeed: 15,         // collisions with cars above this end the run [km/h]
   collisionComfort: 25,
   // a hazard commits only while the tram can still stop at commitBrake after commitReaction (+ margin) …
@@ -145,7 +153,6 @@ export const BRIDGE = {
   reopen: 1.5,
   // the warning starts where a calm stop (commitBrake, 1 s reaction) is still possible, plus up to this [m]
   triggerExtra: 14,
-  bonus: 200,             // crossing on the warning
   angle: 72,              // the leaves fully open [deg]
 };
 

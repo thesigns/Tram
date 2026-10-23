@@ -34,7 +34,7 @@ export class Tram {
     this.doors = 0;       // 0 = closed … 1 = fully open
     this.doorsTarget = 0;
     this.da = 0;          // change of acceleration in the last step (comfort)
-    this.halted = false;  // the run has ended (derailment, collision): grind to a halt
+    this.halted = false;  // the run has ended (a crash): grind to a halt
     this.slide = false;   // the brake asks for more than the rail can give (GDD §5 adhesion)
     this.slip = false;    // … or the power does
   }

@@ -1,4 +1,4 @@
-import { LIMITS, STOPS, TIMETABLE } from '../config.js';
+import { LIMITS, PASSENGERS, STOPS, TIMETABLE } from '../config.js';
 import { clamp, formatClock, formatDelta } from '../core/utils.js';
 
 const FONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
@@ -17,8 +17,8 @@ export const RATING_COLORS = {
 const BAR_MIN = -6;
 const warp = (d) => Math.sign(d) * Math.sqrt(Math.abs(d));
 
-// 2D overlay: next stop, distance / precision bar, speed and limits, clock and schedule, comfort,
-// prompts and rating popups.
+// 2D overlay: next stop, distance / precision bar, speed and limits, clock and schedule, the passengers and
+// comfort, prompts and rating popups. The score is only shown at the end of the line.
 export class Hud {
   constructor(canvas) {
     this.canvas = canvas;
@@ -26,6 +26,8 @@ export class Hud {
     this.popup = null;      // { title, sub, color, time, duration }
     this.notice = null;     // { text, color, time }
     this.left = 60;         // room for the pause button
+    this.moodFlash = 0;     // somebody just got angrier: flash the passenger bar
+    this.lastBad = 0;
     this.resize();
   }
 
@@ -72,14 +74,9 @@ export class Hud {
       this.text(target.name, left, 48, 25);
     }
 
-    // score, combo, comfort
-    this.text('SCORE', w - 16, 22, 13, DIM, 'right', 600);
-    if (run.combo >= 2) {
-      c.font = `600 13px ${FONT}`;
-      this.text(`COMBO ×${run.combo}`, w - 26 - c.measureText('SCORE').width, 22, 13, GREEN, 'right');
-    }
-    this.text(String(run.score), w - 16, 48, 25, INK, 'right');
-    this.comfortBar(c, w - 16 - 86, 56, 86, run.comfort);
+    // the passengers on the line and the ride comfort
+    this.passengerBar(c, w - 16 - 120, 30, 120, run.crowd, dt);
+    this.comfortBar(c, w - 16 - 120, 56, 120, run.comfort);
 
     // distance to the marker, or the precision bar close to it
     const d = run.distance(tram.s);
@@ -136,10 +133,13 @@ export class Hud {
     else if (run.curve && tram.v > run.curve.safe) { prompt = blink ? 'TOO FAST FOR THE CURVE!' : ''; color = RED; }
     else if (tram.slide) { prompt = blink ? 'WHEELS SLIDING – EASE THE BRAKE' : ''; color = RED; }
     else if (tram.slip) { prompt = blink ? 'WHEELS SLIPPING – LESS POWER' : ''; color = RED; }
-    else if (run.overspeed > LIMITS.tolerance) { prompt = blink ? `OVERSPEED  −${LIMITS.overspeedRate}/s` : ''; color = RED; }
-    else if (run.phase === 'board') prompt = run.terminus ? 'Passengers are getting off…' : `Boarding… ${run.boarded}/${target.waiting}`;
+    else if (run.overspeed > LIMITS.tolerance) { prompt = blink ? 'TOO FAST – THE TRAM IS SHAKING' : ''; color = RED; }
+    else if (run.phase === 'board') prompt = run.terminus ? 'Passengers are getting off…' : 'Boarding…';
     else if (run.phase === 'ready') {
       prompt = run.countdown > 0 ? `Close the doors · departure in ${formatDelta(run.countdown).replace('+', '')}` : 'Close the doors and depart';
+    } else if (standing && tram.doorsClosed && run.crowd.waitingAt(run.departPending, run.sched).length) {
+      prompt = blink ? 'Somebody is running for the tram – open the doors' : '';
+      color = AMBER;
     } else if (standing && tram.doorsClosed) {
       prompt = run.countdown > 0 ? `Departure in ${formatDelta(run.countdown).replace('+', '')}` : 'Depart now';
       color = run.countdown > 0 ? INK : GREEN;
@@ -242,6 +242,37 @@ export class Hud {
     c.fillRect(x0 + 8, y - 2, 2, 2);
     c.restore();
     this.text(label, x0 + 26, y, 17, AMBER, 'left');
+  }
+
+  // Everybody on the line, one segment each, sorted green – yellow – red; the ones aboard are bright.
+  passengerBar(c, x, y, bw, crowd, dt) {
+    const P = PASSENGERS, bh = 12;
+    const rank = (a) => (a >= P.red ? 2 : a >= P.yellow ? 1 : 0);
+    const list = crowd.people.map((p) => ({ r: rank(crowd.anger(p)), on: p.state === 'riding' }));
+    list.sort((a, b) => a.r - b.r || b.on - a.on);
+    const bad = list.reduce((n, p) => n + p.r, 0);
+    if (bad > this.lastBad) this.moodFlash = 0.8;
+    this.lastBad = bad;
+    this.moodFlash = Math.max(0, this.moodFlash - dt);
+    const aboard = list.filter((p) => p.on).length;
+    this.text(`PASSENGERS · ${aboard} ABOARD`, x + bw, y - 8, 13, this.moodFlash > 0 ? RED : DIM, 'right', 600);
+    c.save();
+    c.shadowBlur = 0;
+    c.fillStyle = 'rgba(20,22,24,0.55)';
+    c.fillRect(x, y, bw, bh);
+    const seg = (bw - 2) / Math.max(1, list.length), gap = seg >= 4 ? 1 : 0;
+    list.forEach((p, i) => {
+      c.globalAlpha = p.on ? 1 : 0.45;
+      c.fillStyle = [GREEN, AMBER, RED][p.r];
+      c.fillRect(x + 1 + i * seg, y + 1, seg - gap, bh - 2);
+    });
+    c.globalAlpha = 1;
+    if (this.moodFlash > 0) {
+      c.strokeStyle = RED;
+      c.lineWidth = 2;
+      c.strokeRect(x - 1, y - 1, bw + 2, bh + 2);
+    }
+    c.restore();
   }
 
   comfortBar(c, x, y, bw, comfort) {

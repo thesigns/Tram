@@ -6,7 +6,6 @@
   "seed": 23,
   "speed": 40,
   "startTime": "07:05",
-  "stars": [4000, 8000, 11500],
   "limits": [
     { "from": 640, "to": 790, "kmh": 30 }
   ],
