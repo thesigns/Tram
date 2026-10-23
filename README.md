@@ -84,6 +84,7 @@ index.html            game page (Three.js from a CDN via importmap, no bundler)
 css/style.css
 data/routes/          lines: index.json, and per line the track, stops, signals, hazards, landmarks
 docs/                 game design document
+fonts/dinish/         DINish, the game's font (a DIN 1451 look, SIL OFL 1.1)
 js/main.js            game loop, loading lines, camera, menus
 js/config.js          tuning: physics, brakes, stop rating, city
 js/core/              tram physics, run (stops, doors), crowd (passengers, score), street (signals,
@@ -104,4 +105,5 @@ All paths are relative – just enable Pages for the branch that has `index.html
 
 ## License
 
-[MIT](LICENSE) © 2026 Jakub W. Adamczyk
+[MIT](LICENSE) © 2026 Jakub W. Adamczyk. The font [DINish](https://github.com/playbeing/dinish) is under the
+[SIL Open Font License 1.1](fonts/dinish/OFL.txt).

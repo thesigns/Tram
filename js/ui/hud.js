@@ -1,7 +1,7 @@
 import { JUNCTION, LIMITS, PASSENGERS, STOPS, TIMETABLE } from '../config.js';
 import { clamp, formatClock, formatDelta } from '../core/utils.js';
 
-const FONT = '"Barlow Condensed", "Arial Narrow", sans-serif';
+const FONT = '"DINish", Arial, sans-serif';
 const INK = 'rgba(248,244,232,0.96)';
 const DIM = 'rgba(248,244,232,0.7)';
 const RED = '#ff5a46';
@@ -44,12 +44,14 @@ export class Hud {
   showRating(title, sub, color) { this.popup = { title, sub, color, time: 2.6, duration: 2.6 }; }
   showNotice(text, color = INK, time = 2.2) { this.notice = { text, color, time }; }
 
-  text(str, x, y, size, color = INK, align = 'left', weight = 700) {
+  // maxWidth: squeeze the text to fit (canvas fillText) – long stop names on narrow phones
+  text(str, x, y, size, color = INK, align = 'left', weight = 700, maxWidth = 0) {
     const c = this.ctx;
     c.font = `${weight} ${size}px ${FONT}`;
     c.textAlign = align;
     c.fillStyle = color;
-    c.fillText(str, x, y);
+    if (maxWidth > 0) c.fillText(str, x, y, maxWidth);
+    else c.fillText(str, x, y);
   }
 
   draw(dt, st) {
@@ -71,8 +73,9 @@ export class Hud {
       const atStop = run.phase === 'board' || run.phase === 'ready';
       const time = run.terminus ? `ARR ${formatClock(run.arrAt(run.idx))}` : `DEP ${formatClock(run.depAt(run.idx))}`;
       const kind = atStop ? 'AT STOP' : run.terminus ? 'TERMINUS' : target.request ? 'REQUEST STOP' : 'NEXT STOP';
-      this.text(`${kind} · ${time}`, left, 22, 13, DIM, 'left', 600);
-      this.text(target.name, left, 48, 25);
+      // clear of the passenger label (wider than its bar) and of the bars
+      this.text(`${kind} · ${time}`, left, 22, 13, DIM, 'left', 600, w - 16 - 150 - left);
+      this.text(target.name, left, 48, 25, INK, 'left', 700, w - 16 - 120 - 10 - left);
     }
 
     // the passengers on the line and the ride comfort

@@ -1,3 +1,9 @@
+/* DINish (SIL OFL 1.1, fonts/dinish/OFL.txt): a DIN 1451 look, like German street and transit signs */
+@font-face { font-family: "DINish"; src: url("../fonts/dinish/DINish-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "DINish"; src: url("../fonts/dinish/DINish-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "DINish"; src: url("../fonts/dinish/DINish-Bold.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "DINish"; src: url("../fonts/dinish/DINish-Heavy.woff2") format("woff2"); font-weight: 800; font-display: swap; }
+
 :root {
   --ink: #1d2024;
   --paper: #f4efe3;
@@ -7,7 +13,7 @@
   --power: #9fe0a0;
   --brake: #f2c230;
   --eb: #ff5a46;
-  --font: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font: "DINish", Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }

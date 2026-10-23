@@ -9,6 +9,7 @@ Tram is an arcade tram-driving game played from the motorman's cab: drive along 
 ## Technical rules
 
 - **Vanilla JS + ES modules, no bundler and no npm.** Three.js `0.160.0` is loaded from jsDelivr via the `importmap` in `index.html`. Don't add a build step or `package.json` unless explicitly asked.
+- **The font is DINish** (a DIN 1451 look, like German street and transit signs), self-hosted in `fonts/dinish/` (weights 400/600/700/800, SIL OFL – keep `OFL.txt` with it); no font CDN. The HUD canvas uses the same font (`FONT` in `js/ui/hud.js`) and squeezes long texts with `maxWidth`.
 - **`index.html` must stay in the repo root.** Everything else goes into subfolders. All paths are relative (GitHub Pages serves from a subdirectory).
 - **No PWA** (manifest, service worker) until the user asks for it. Until then the game also stays a normal browser page: no fullscreen request.
 - Everything is **in English**: UI text, code comments, docs.

@@ -621,7 +621,8 @@ try {
 }
 resize();
 setMode('menu');
-Promise.race([document.fonts?.load('700 16px "Barlow Condensed"'), new Promise((r) => setTimeout(r, 1500))])
+const fontsLoaded = document.fonts ? Promise.all([400, 600, 700, 800].map((w) => document.fonts.load(`${w} 16px "DINish"`))) : null;
+Promise.race([fontsLoaded, new Promise((r) => setTimeout(r, 1500))])
   .catch(() => {})
   .finally(() => $('loading').classList.add('hidden'));
 requestAnimationFrame((t) => { last = t; frame(t); });
