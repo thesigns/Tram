@@ -277,4 +277,8 @@ export const VIEW = {
   centerLandscape: 0.45,
   headTilt: -0.04,        // look slightly down at the street [rad]
   lookAhead: 14,          // the view turns towards the track this far ahead (looking into curves)
+  // the HUD is laid out for a 390 px wide phone; bigger screens (a computer) scale it up
+  hudWidth: 390,
+  hudHeight: 600,
+  hudMaxScale: 1.6,
 };

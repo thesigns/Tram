@@ -4,7 +4,7 @@ Guidance for AI agents working on this repository. The game design is in `docs/T
 
 ## Project overview
 
-Tram is an arcade tram-driving game played from the motorman's cab: drive along the rails, stop precisely on the marker at each platform, run the doors, depart. Low-poly 3D, a mobile-first browser game (portrait first, landscape supported). The target host is GitHub Pages. Current state: **M1 vertical slice plus the first part of M2** (GDD §15) – Altstadt Line 1, Hafenberg Line 4, Neustadt Line 9 and a training line; lever, physics with grades and adhesion (wet rails), precision stops, doors, speed limits and curves, ride comfort, passengers with destinations whose mood is the score, timetable, tram signals, traffic hazards, a lifting bridge, a tunnel, points (junctions), a single-track section with a tram the other way, the bell, request stops, stars and saved progress, HUD and sound.
+Tram is an arcade tram-driving game played from the motorman's cab: drive along the rails, stop precisely on the marker at each platform, run the doors, depart. Low-poly 3D, a mobile-first browser game: portrait on phones (a phone held sideways gets a "turn your phone" card and the run pauses), landscape only on a computer. The target host is GitHub Pages. Current state: **M1 vertical slice plus the first part of M2** (GDD §15) – Altstadt Line 1, Hafenberg Line 4, Neustadt Line 9 and a training line; lever, physics with grades and adhesion (wet rails), precision stops, doors, speed limits and curves, ride comfort, passengers with destinations whose mood is the score, timetable, tram signals, traffic hazards, a lifting bridge, a tunnel, points (junctions), a single-track section with a tram the other way, the bell, request stops, stars and saved progress, HUD and sound.
 
 ## Technical rules
 
@@ -43,7 +43,8 @@ Tram is an arcade tram-driving game played from the motorman's cab: drive along 
 
 ## Mobile view and controls
 
-- `resize()` in `js/main.js` handles both orientations: the optical centre is moved up with `camera.setViewOffset` (35% from the top in portrait), so the street is above and the cab with the thumbs is below.
+- `resize()` in `js/main.js` handles both orientations (landscape is for computers; phones are portrait only – `#rotate` in the CSS and `SIDEWAYS` in `main.js` share one media query): the optical centre is moved up with `camera.setViewOffset` (35% from the top in portrait), so the street is above and the cab with the thumbs is below.
+- The HUD canvas is laid out for a 390 px wide phone and scaled up on bigger screens (`VIEW.hud*` in `js/config.js`, `hud.scale`); screen-space inputs such as hazard markers are divided by the scale.
 - The master controller (`js/core/input.js`) uses relative drag with notches and haptic ticks; EB sits below an extra gap (a detent). `input.layout()` must run while the lever is visible (it measures the element).
 - Doors are interlocked (GDD §4.1): they open only at standstill and traction is cut while they are open.
 
@@ -52,6 +53,6 @@ Tram is an arcade tram-driving game played from the motorman's cab: drive along 
 - Start a server with `python -m http.server 8765`. **Don't use port 8080** (another app's service worker on the user's machine).
 - The browser caches modules served by `http.server`: hard-reload (Ctrl+Shift+R) after changes, or use a server that sends `Cache-Control: no-store`.
 - `?debug` shows a state readout and exposes `window.tram = { game, tram, run, track, input, sound, camera }`. Measure with console scripts (stopping distances, ratings) instead of judging by eye.
-- To check the phone layout, inject a 390×780 (portrait) and an 844×390 (landscape) `<iframe>` into a page from the same server – a page that doesn't run the game itself.
+- To check the phone layout, inject a 390×780 (phone, portrait) and a 1280×720 (computer window) `<iframe>` into a page from the same server – a page that doesn't run the game itself.
 - Test on a real phone early (GDD §15).
 - The console must stay clean.

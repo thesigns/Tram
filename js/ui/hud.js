@@ -1,4 +1,4 @@
-import { JUNCTION, LIMITS, PASSENGERS, STOPS, TIMETABLE } from '../config.js';
+import { JUNCTION, LIMITS, PASSENGERS, STOPS, TIMETABLE, VIEW } from '../config.js';
 import { clamp, formatClock, formatDelta } from '../core/utils.js';
 
 const FONT = '"DINish", Arial, sans-serif';
@@ -34,11 +34,14 @@ export class Hud {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.w = window.innerWidth;
-    this.h = window.innerHeight;
-    this.canvas.width = Math.round(this.w * dpr);
-    this.canvas.height = Math.round(this.h * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const W = window.innerWidth, H = window.innerHeight;
+    // drawn in HUD units: 1 on a phone, larger on a computer; w and h are the screen in those units
+    this.scale = clamp(Math.min(W / VIEW.hudWidth, H / VIEW.hudHeight), 1, VIEW.hudMaxScale);
+    this.w = W / this.scale;
+    this.h = H / this.scale;
+    this.canvas.width = Math.round(W * dpr);
+    this.canvas.height = Math.round(H * dpr);
+    this.ctx.setTransform(dpr * this.scale, 0, 0, dpr * this.scale, 0, 0);
   }
 
   showRating(title, sub, color) { this.popup = { title, sub, color, time: 2.6, duration: 2.6 }; }
@@ -160,7 +163,7 @@ export class Hud {
     }
 
     // hazards worth watching, and something on the tracks ahead
-    for (const m of st.markers ?? []) this.marker(c, m.x, m.y, m.dist);
+    for (const m of st.markers ?? []) this.marker(c, m.x / this.scale, m.y / this.scale, m.dist);   // markers are in screen px
     const hz = run.street.warning;
     if (hz && run.phase === 'drive') this.hazard(c, w / 2, y + 102, `${HAZARD_TEXT[hz.kind]} · ${Math.round(hz.dist)} m`);
 
