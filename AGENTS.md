@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI agents working on this repository. The game design is in `docs/Tram-GDD.md`; controls and layout are in `README.md`.
+Guidance for AI agents working on this repository. The game design is in `docs/Tram-GDD.md`; controls and layout are in `README.md`; what is left to do is in `TODO.md` – start there, and tick items off as they are done.
 
 ## Project overview
 
