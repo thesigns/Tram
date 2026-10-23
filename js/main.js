@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SIM, TRAMS, VIEW, WORLD } from './config.js';
+import { LOOKS, SIM, TRAMS, VIEW, WORLD } from './config.js';
 import { EB, Tram } from './core/tram.js';
 import { Run } from './core/run.js';
 import { Input } from './core/input.js';
@@ -9,8 +9,10 @@ import { Track } from './world/track.js';
 import { SpeedLimits } from './world/limits.js';
 import { createCity } from './world/city.js';
 import { createLandmarks } from './world/landmarks.js';
+import { createStructures } from './world/structures.js';
 import { createSigns } from './world/signs.js';
-import { createSky } from './world/sky.js';
+import { createSky, paintSky } from './world/sky.js';
+import { groundLevel } from './world/frame.js';
 import { Passengers } from './entities/passengers.js';
 import { TrafficView } from './entities/traffic.js';
 import { createCab, setLamp, setSpeedo } from './models/cab.js';
@@ -32,6 +34,8 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(WORLD.fogColor);
 scene.fog = new THREE.Fog(WORLD.fogColor, WORLD.fogNear, WORLD.fogFar);
 scene.add(new THREE.HemisphereLight(0xe4edf4, 0x6b6656, 1.6));
+const fogColor = new THREE.Color(WORLD.fogColor);       // the line's fog colour outside tunnels
+const TUNNEL_FOG = new THREE.Color(0x15171a);
 const sunLight = new THREE.DirectionalLight(0xfff1d8, 2.0);
 sunLight.position.copy(sunDir);
 scene.add(sunLight);
@@ -49,7 +53,8 @@ const cabScene = new THREE.Scene();
 const cab = createCab();
 cabScene.add(cab);
 const cabSun = new THREE.DirectionalLight(0xfff1d8, 1.5);
-cabScene.add(new THREE.HemisphereLight(0xe4edf4, 0x6b6656, 1.5), cabSun, cabSun.target);
+const cabHemi = new THREE.HemisphereLight(0xe4edf4, 0x6b6656, 1.5);
+cabScene.add(cabHemi, cabSun, cabSun.target);
 const cabCam = new THREE.PerspectiveCamera(60, 1, 0.02, 10);
 
 // ---------- game systems ----------
@@ -71,7 +76,7 @@ const game = {
 
 // ---------- lines and the world ----------
 let lines = [];     // data/routes/index.json
-let W = null;       // the loaded line: { def, route, track, limits, run, city, passengers, traffic, group }
+let W = null;       // the loaded line: { def, route, track, limits, run, city, structures, passengers, traffic, group }
 
 async function loadLine(def) {
   if (W?.def.id === def.id) return;
@@ -87,12 +92,20 @@ async function loadLine(def) {
   const limits = new SpeedLimits(track, route, tramCfg.length);
   const run = new Run(route, tramCfg, track, limits, onRunEvent);
   const city = createCity(track, run.stops, route);
-  group.add(city.group, createSigns(track, limits), createLandmarks(track, route).group);
+  const structures = createStructures(track, route);
+  group.add(city.group, structures.group, createSigns(track, limits), createLandmarks(track, route).group);
   const passengers = new Passengers(group, track, run.stops, route.seed);
   const traffic = new TrafficView(group, track, run.street);
   scene.add(group);
-  ground.position.y = Math.min(...track.y) - 0.05;
-  W = { def, route, track, limits, run, city, passengers, traffic, group };
+  // the city's sky, fog and ground – the sea where there is one
+  const look = LOOKS[route.look ?? 'modern'];
+  fogColor.set(look.fog ?? WORLD.fogColor);
+  scene.fog.color.copy(fogColor);
+  scene.background.copy(fogColor);
+  paintSky(sky, look.sky ?? WORLD.skyTop, fogColor);
+  ground.position.y = groundLevel(track, route);
+  ground.material.color.set(route.sea != null ? look.sea : WORLD.ground);
+  W = { def, route, track, limits, run, city, structures, passengers, traffic, group };
   tram.reset(run.stops[0].s);
   game.prevS = tram.s;
   rememberLine(progress, def.id);
@@ -161,8 +174,8 @@ function onRunEvent(type, d) {
         hud.showRating('DERAILED', `${Math.round(d.kmh)} km/h in a ${d.limit} km/h curve`, RATING_COLORS.MISSED);
         sound.derail();
         cam.crash = 1;
-      } else if (d.reason === 'collision') {
-        hud.showRating('COLLISION', `${Math.round(d.kmh)} km/h`, RATING_COLORS.MISSED);
+      } else if (d.reason === 'collision' || d.reason === 'bridge') {
+        hud.showRating(d.reason === 'bridge' ? 'THE BRIDGE IS UP' : 'COLLISION', `${Math.round(d.kmh)} km/h`, RATING_COLORS.MISSED);
         sound.derail();
         cam.jolt = 1;
       } else {
@@ -171,6 +184,14 @@ function onRunEvent(type, d) {
         fade.style.opacity = 1;
       }
       game.endTimer = 2.8;
+      break;
+    case 'bridge':
+      if (d.phase === 'warning') hud.showNotice('The bridge is about to lift', '#f2c230', 3);
+      if (d.phase === 'made') {
+        hud.showNotice(`Made the bridge  +${d.points}`, '#9fe05e', 2.6);
+        sound.rating('GOOD');
+      }
+      if (d.phase === 'cleared' && d.excuse > 0) hud.showNotice(`Bridge lift: timetable ${formatDelta(d.excuse)}`, '#62c4ff', 3);
       break;
     case 'board': W.passengers.board(d.stop, d.k, tramCfg.doors.map((x) => tram.s - x)); break;
     case 'ready': sound.beep(); break;
@@ -227,7 +248,7 @@ function startRun() {
   W.passengers.reset(run.stops);
   resetView();
   setMode('playing');
-  hud.showRating(`DEP ${formatClock(run.timetable.dep[0]).slice(0, 5)}`, `Next stop: ${run.target.name}`, '#f8f4e8');
+  hud.showRating(`DEP ${formatClock(run.depAt(0)).slice(0, 5)}`, `Next stop: ${run.target.name}`, '#f8f4e8');
 }
 
 // After a failure: back to the last served stop, for a penalty.
@@ -285,7 +306,7 @@ function renderMenu() {
   $('menu-stars').textContent = `★ ${total}`;
   for (const def of lines) {
     const rec = progress.lines[def.id];
-    const locked = total < (def.unlock ?? 0);
+    const locked = !debug && total < (def.unlock ?? 0);   // ?debug opens every line
     const btn = document.createElement('button');
     btn.className = 'line';
     btn.disabled = locked;
@@ -315,10 +336,12 @@ const RESULT_COLORS = {
 };
 const FAIL_TEXT = {
   derail: (f) => ['DERAILED', `${Math.round(f.kmh)} km/h in a ${f.limit} km/h curve.`],
-  collision: (f) => ['COLLISION', `You hit a car at ${Math.round(f.kmh)} km/h.`],
+  collision: (f) => ['COLLISION', `You hit ${VEHICLE[f.what] ?? 'a car'} at ${Math.round(f.kmh)} km/h.`],
+  bridge: () => ['RUN ENDED', 'You drove onto the lifting bridge while it was up. Stop on the bridge signal.'],
   pedestrian: () => ['RUN ENDED', 'You hit a pedestrian. Watch the kerbs, brake early and use the bell.'],
   cyclist: () => ['RUN ENDED', 'You hit a cyclist. Keep your distance and use the bell.'],
 };
+const VEHICLE = { car: 'a car', van: 'a van', lift: 'a forklift' };
 const ROW_NOTE = { PASSED: 'nobody needed it', EMPTY: 'nobody needed it', MISSED: '' };
 
 const RESULT_PUNCT = { 'ON TIME': '#1f8a4c', LATE: '#c8382c', EARLY: '#c8382c' };
@@ -385,6 +408,7 @@ function showResults() {
     [`Comfort (average ${Math.round(run.comfort.average)}%)`, p.comfort],
     ['Overspeed', p.overspeed],
     ['Penalties', p.penalties],
+    ...(p.bonus ? [['Bonuses', p.bonus]] : []),
     ...(run.continueCost ? [[`Continues (${run.continues})`, -run.continueCost]] : []),
   ];
   for (const [label, value] of items) {
@@ -458,6 +482,7 @@ function updateCab() {
   setLamp(lamps.open, tram.doors > 0);
   setLamp(lamps.interlock, tram.interlocked && blink);
   setLamp(lamps.request, run.stopRequested && run.phase === 'drive');
+  setLamp(lamps.slip, (tram.slide || tram.slip) && blink);
   setSpeedo(cab, tram.v * 3.6);
   doorsBtn.classList.toggle('open', tram.doorsTarget === 1);
 }
@@ -502,7 +527,7 @@ function frame(now) {
     while (game.acc >= STEP) {
       game.prevS = tram.s;
       // the average grade under the body: smooth where pieces meet
-      tram.step(STEP, track.slope(tram.s - tramCfg.length, tram.s));
+      tram.step(STEP, track.slope(tram.s - tramCfg.length, tram.s), run.grip(tram.s));
       run.update(STEP, tram);
       game.acc -= STEP;
     }
@@ -522,13 +547,19 @@ function frame(now) {
   updateCamera(s, game.mode === 'paused' ? 0 : dt);
   updateCab();
   W.city.update(s);
+  W.structures.update(run.street, run.street.time);
   traffic.update(run.street.time);
+  // inside a tunnel: dark fog, a dim cab
+  const dark = W.structures.darkness(s - tramCfg.eyeBack);
+  scene.fog.color.copy(fogColor).lerp(TUNNEL_FOG, dark * 0.9);
+  cabHemi.intensity = 1.5 * (1 - 0.7 * dark);
+  cabSun.intensity = 1.5 * (1 - 0.95 * dark);
 
   renderer.clear();
   renderer.render(scene, camera);
   renderer.clearDepth();
   renderer.render(cabScene, cabCam);
-  const markers = game.mode === 'playing' ? traffic.markers(camera, window.innerWidth, window.innerHeight, tram.s) : null;
+  const markers = game.mode === 'playing' ? traffic.markers(camera, window.innerWidth, window.innerHeight, tram.s, W.structures.hides) : null;
   hud.draw(dt, { playing: game.mode === 'playing', run, tram, markers, debug, fps: game.fps });
 
   // adaptive resolution: lower the pixel ratio on a weak GPU

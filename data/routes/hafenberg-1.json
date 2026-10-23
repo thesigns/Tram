@@ -1,0 +1,77 @@
+{
+  "id": "hafenberg-1",
+  "name": "Line 4",
+  "city": "Hafenberg",
+  "look": "hafen",
+  "seed": 41,
+  "speed": 50,
+  "startTime": "08:20",
+  "sea": -2.5,
+  "stars": [2800, 5500, 8000],
+  "limits": [
+    { "from": 500, "to": 2000, "kmh": 40 }
+  ],
+  "pieces": [
+    { "type": "straight", "length": 300 },
+    { "type": "curve", "radius": 300, "angle": 15, "dir": "left" },
+    { "type": "straight", "length": 120 },
+    { "type": "curve", "radius": 50, "angle": 60, "dir": "left" },
+    { "type": "straight", "length": 270 },
+    { "type": "curve", "radius": 45, "angle": 80, "dir": "right", "grade": 3 },
+    { "type": "straight", "length": 120, "grade": 6 },
+    { "type": "straight", "length": 30, "grade": 2 },
+    { "type": "curve", "radius": 25, "angle": 90, "dir": "left", "grade": 3 },
+    { "type": "straight", "length": 100, "grade": 6 },
+    { "type": "straight", "length": 60, "grade": 1 },
+    { "type": "straight", "length": 30 },
+    { "type": "curve", "radius": 120, "angle": 50, "dir": "right" },
+    { "type": "straight", "length": 70, "grade": -2 },
+    { "type": "straight", "length": 140, "grade": -6 },
+    { "type": "straight", "length": 60, "grade": -2 },
+    { "type": "curve", "radius": 80, "angle": 60, "dir": "left", "grade": -4 },
+    { "type": "straight", "length": 80, "grade": -3 },
+    { "type": "straight", "length": 70 }
+  ],
+  "stops": [
+    { "name": "Hafenbahnhof", "s": 40 },
+    { "name": "Fischmarkt", "s": 230 },
+    { "name": "Speicherstadt", "s": 480 },
+    { "name": "Werft", "s": 805, "request": true },
+    { "name": "Kirchberg", "s": 1221 },
+    { "name": "Klippenweg", "s": 1626 },
+    { "name": "Am Leuchtturm", "s": 1851 }
+  ],
+  "intersections": [
+    { "s": 285, "signal": true },
+    { "s": 940 },
+    { "s": 1130, "signal": true },
+    { "s": 1560 }
+  ],
+  "hazards": [
+    { "type": "jaywalker", "s": 185, "chance": 0.7 },
+    { "type": "leftTurn", "s": 285, "chance": 0.6 },
+    { "type": "forklift", "s": 420, "side": "right", "chance": 0.8 },
+    { "type": "parked", "s": 965, "chance": 0.6 },
+    { "type": "cyclist", "s": 1500, "turnAt": 1560, "chance": 0.7 },
+    { "type": "jaywalker", "s": 1760, "side": "right", "chance": 0.6 }
+  ],
+  "wet": [
+    { "from": 140, "to": 260 }
+  ],
+  "bridge": { "s": 700, "length": 30, "chance": 0.7 },
+  "tunnels": [
+    { "from": 1271, "to": 1431 }
+  ],
+  "quays": [
+    { "from": 50, "to": 540, "side": "left", "edge": 22 }
+  ],
+  "views": [
+    { "from": 1640, "to": 1872, "side": "left" }
+  ],
+  "landmarks": [
+    { "type": "market", "from": 160, "to": 252, "side": "left", "rows": [11, 17] },
+    { "type": "cranes", "from": 300, "to": 540, "side": "left" },
+    { "type": "ship", "from": 385, "to": 478, "off": -31 },
+    { "type": "lighthouse", "s": 1866, "off": -24 }
+  ]
+}

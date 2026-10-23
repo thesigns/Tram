@@ -88,7 +88,7 @@ The tram runs along a track centreline, so its position is a single number `s`, 
 - **Traction:** force from the power notch; it is constant up to a base speed and then falls off, like a real traction motor.
 - **Resistance:** rolling and aero drag, plus the gradient component (`g · sin θ`). Hills matter.
 - **Brakes:** service brake B1–B4 ≈ 0.4 / 0.8 / 1.2 / 1.6 m/s² (B4 is a little above a real tram's ~1.3 m/s², for arcade pacing); emergency brake ~2.8 m/s² (magnetic track brake), with an extra comfort and score penalty.
-- **Adhesion:** a wet or leafy rail lowers the available grip. Too much power or brake causes wheel slip or slide (warning light plus sound). A **sand** button could be added later.
+- **Adhesion:** a wet or leafy rail lowers the available grip. Too much power or brake causes wheel slip or slide (warning light plus sound). A **sand** button could be added later. *Implemented (M2):* wet rails give 1.1 m/s² of grip, so B3, B4 and P4 from a standstill are too much; sliding or slipping wheels transmit only about half of it. The emergency brake's magnetic track brakes don't depend on adhesion. Hazards and the timetable assume B2 on wet rails, and less braking downhill.
 - **Mass:** each tram type has a different mass, so different inertia and braking distances. That is the main "feel" difference between vehicles.
 - **Jerk:** the rate of change of acceleration drives the **comfort meter**. Moving smoothly through the notches keeps passengers happy.
 - **Curves:** each curve has a safe speed, v = √(0.7 m/s² · R), signed rounded down to 5 km/h (R 100 m → 30 km/h, R 25 m → 15 km/h). Over it, there is wheel squeal and a comfort penalty; far over it (arcade threshold, +40%), the tram **derails** and the run fails. A higher limit applies only once the whole tram has passed its sign.
@@ -176,6 +176,8 @@ Fictional cities give freedom to design routes as levels, each with a strong ide
 4. Later ideas: a **river city** with bridges and an island, a **winter city** (snow, low adhesion), an **interurban line** leaving the city through fields to a lakeside resort (high speed, then village street-running).
 
 Each city has 2–4 **lines**, and each line has variants: **day / night / rain / rush hour**. Rush hour means more passengers, longer boarding and more traffic.
+
+Implementation notes (M2, Hafenberg Line 4): the line starts on the quay (cranes, a moored ship, the fish market with wet rails), crosses a double-leaf **lifting bridge** and climbs 6% through a tight R25 curve to Kirchberg, runs through a curving tunnel under the hill and descends along a sea terrace to the lighthouse. The bridge lifts in about 70% of runs. Its signal shows "prepare" while the tram can still stop calmly (plus a random margin), so the race is sometimes possible and sometimes not: crossing on "prepare" earns a bonus, crossing on "stop" is a red-signal penalty, and driving onto a raised leaf ends the run. The bridge never lifts with the tram past its stop line. The delay a lift causes is excused: the timetable and the green wave move with it.
 
 Route features to mix in: loop termini, stub termini (with a double-ended tram, so the player switches cabs), junctions, depot exit/entry runs, gradients, tunnels, bridges, single-track sections, mixed traffic vs. reserved track, stops on islands vs. kerbside stops (passengers crossing the road).
 
@@ -275,6 +277,8 @@ Synthesised with Web Audio where possible (the *Jasta* approach, no audio files 
 
 - Hafenberg and Neustadt, junctions, passing loop, lifting bridge, tunnel.
 - Second and third tram types, night and rain variants.
+
+Progress: Hafenberg Line 4 is done (lifting bridge, tunnel, steep grades, wet rails and adhesion, a forklift crossing from the warehouses). Next: Neustadt with junctions and a passing loop, then the tram types and the night and rain variants.
 
 ### M3 – Polish
 

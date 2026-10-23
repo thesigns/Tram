@@ -10,6 +10,7 @@ export class Sound {
   constructor() {
     this.ctx = null;
     this.lastS = null;
+    this.nextDing = 0;
   }
 
   // Must be called from a user-gesture handler (autoplay policy).
@@ -73,15 +74,26 @@ export class Sound {
     this.growl.frequency.setTargetAtTime(28 + v * 6, t, 0.05);
     this.growlFilter.frequency.setTargetAtTime(180 + v * 30 + effort * 250, t, 0.1);
     this.growlGain.gain.setTargetAtTime((0.02 + effort * 0.16) * Math.max(moving, tram.traction), t, 0.08);
-    this.whine.frequency.setTargetAtTime(90 + v * 52, t, 0.05);
-    this.whineGain.gain.setTargetAtTime(effort * 0.03 * moving, t, 0.08);
+    // slipping wheels spin up: the motors race
+    this.whine.frequency.setTargetAtTime(90 + (v + (tram.slip ? 6 : 0)) * 52, t, 0.05);
+    this.whineGain.gain.setTargetAtTime(tram.slip ? 0.05 : effort * 0.03 * moving, t, 0.08);
     const sp = clamp(v / 14, 0, 1.3);
     this.rollFilter.frequency.setTargetAtTime(160 + v * 50, t, 0.2);
     this.rollGain.gain.setTargetAtTime(sp * 0.16, t, 0.15);
     const squeal = tram.brake > 0.5 && v > 0.05 && v < 2.2 ? 0.035 : 0;
     this.squealGain.gain.setTargetAtTime(squeal, t, squeal ? 0.15 : 0.05);
     const excess = clamp((run.lateral - COMFORT.lateralFree) / COMFORT.lateralFree, 0, 1);
-    this.flangeGain.gain.setTargetAtTime(excess > 0 && v > 0.5 ? 0.02 + excess * 0.12 : 0, t, 0.08);
+    // flanges in a curve taken too fast; sliding wheels grind the same way
+    const grind = tram.slide && v > 0.5 ? 0.09 : excess > 0 && v > 0.5 ? 0.02 + excess * 0.12 : 0;
+    this.flangeGain.gain.setTargetAtTime(grind, t, 0.08);
+
+    // the lifting bridge's warning bells, until the barriers are down
+    const br = run.street.bridge;
+    if (br && (br.state === 'warning' || br.state === 'barriers') && t >= this.nextDing) {
+      const near = clamp(1 - Math.abs(br.s0 - tram.s) / 320, 0, 1);
+      if (near > 0) this.tone(640, 0.14 * near, 0.35, 0, [[1, 1], [2.4, 0.3]]);
+      this.nextDing = t + 0.45;
+    }
 
     // rail joints under each axle
     if (this.lastS !== null && v > 0.3) {

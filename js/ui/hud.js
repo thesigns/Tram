@@ -9,7 +9,7 @@ const RED = '#ff5a46';
 const AMBER = '#f2c230';
 const GREEN = '#9fe05e';
 const BLUE = '#62c4ff';
-const HAZARD_TEXT = { car: 'CAR ON THE TRACK', van: 'OBSTRUCTION', ped: 'PEDESTRIAN', bike: 'CYCLIST AHEAD' };
+const HAZARD_TEXT = { car: 'CAR ON THE TRACK', van: 'OBSTRUCTION', ped: 'PEDESTRIAN', bike: 'CYCLIST AHEAD', lift: 'FORKLIFT' };
 export const RATING_COLORS = {
   PERFECT: '#5ee08a', GREAT: GREEN, GOOD: AMBER, OK: '#f0a050', MISSED: RED, PASSED: GREEN, EMPTY: '#b8c0c8',
 };
@@ -56,7 +56,6 @@ export class Hud {
     c.clearRect(0, 0, w, h);
     if (!st.playing) { this.drawPopup(c, dt); return; }
     const { run, tram } = st;
-    const tt = run.timetable;
     const blink = Math.floor(performance.now() / 350) % 2 === 0;
 
     c.shadowColor = 'rgba(0,0,0,0.55)';
@@ -68,7 +67,7 @@ export class Hud {
     const left = this.left;
     if (target) {
       const atStop = run.phase === 'board' || run.phase === 'ready';
-      const time = run.terminus ? `ARR ${formatClock(tt.arr[run.idx])}` : `DEP ${formatClock(tt.dep[run.idx])}`;
+      const time = run.terminus ? `ARR ${formatClock(run.arrAt(run.idx))}` : `DEP ${formatClock(run.depAt(run.idx))}`;
       const kind = atStop ? 'AT STOP' : run.terminus ? 'TERMINUS' : target.request ? 'REQUEST STOP' : 'NEXT STOP';
       this.text(`${kind} · ${time}`, left, 22, 13, DIM, 'left', 600);
       this.text(target.name, left, 48, 25);
@@ -111,6 +110,9 @@ export class Hud {
     if (sig) this.signalIcon(c, w / 2 - 120, y - 10, sig, blink);
     const n = tram.notch;
     this.text(notchName(n), w / 2, y + 20, 15, n === EB ? RED : n > 0 ? '#9fe0a0' : n < 0 ? AMBER : DIM, 'center');
+    // wet rails under the tram or ahead (GDD §5 adhesion)
+    const wet = run.wetAhead(tram.s);
+    if (wet) this.text(wet.dist > 0 ? `WET RAILS in ${Math.round(wet.dist)} m` : 'WET RAILS', w / 2 + 34, y + 20, 14, BLUE, 'left');
 
     // clock and the schedule: countdown at a stop, live delta on the way
     const clock = formatClock(run.clock);
@@ -135,6 +137,8 @@ export class Hud {
     const standing = tram.stopped && run.phase === 'drive' && run.departPending !== null;
     if (tram.interlocked) { prompt = blink ? 'DOORS OPEN – NO TRACTION' : ''; color = RED; }
     else if (run.curve && tram.v > run.curve.safe) { prompt = blink ? 'TOO FAST FOR THE CURVE!' : ''; color = RED; }
+    else if (tram.slide) { prompt = blink ? 'WHEELS SLIDING – EASE THE BRAKE' : ''; color = RED; }
+    else if (tram.slip) { prompt = blink ? 'WHEELS SLIPPING – LESS POWER' : ''; color = RED; }
     else if (run.overspeed > LIMITS.tolerance) { prompt = blink ? `OVERSPEED  −${LIMITS.overspeedRate}/s` : ''; color = RED; }
     else if (run.phase === 'board') prompt = run.terminus ? 'Passengers are getting off…' : `Boarding… ${run.boarded}/${target.waiting}`;
     else if (run.phase === 'ready') {
@@ -202,6 +206,7 @@ export class Hud {
     c.restore();
     const color = sig.aspect === 'stop' ? RED : sig.aspect === 'prepare' ? AMBER : DIM;
     this.text(`${Math.round(sig.dist)} m`, x, y + 41, 13, color, 'center', 600);
+    if (sig.bridge) this.text('BRIDGE', x, y + 55, 11, DIM, 'center', 600);
   }
 
   // A small "!" above a hazard in the street; it grows as the tram gets closer.

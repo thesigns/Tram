@@ -62,9 +62,12 @@ export function createCab() {
   dial.add(needle);
   root.add(dial);
 
-  // lamps: doors closed (green), doors open (amber), no traction (red), stop requested (blue)
-  const lamps = { closed: lamp('#4cd964'), open: lamp('#ffb020'), interlock: lamp('#ff3b30'), request: lamp('#62c4ff') };
-  [lamps.closed, lamps.open, lamps.interlock, lamps.request].forEach((m, i) => {
+  // lamps: doors closed (green), doors open (amber), no traction (red), stop requested (blue),
+  // wheel slip or slide (orange)
+  const lamps = {
+    closed: lamp('#4cd964'), open: lamp('#ffb020'), interlock: lamp('#ff3b30'), request: lamp('#62c4ff'), slip: lamp('#ff8c1a'),
+  };
+  [lamps.closed, lamps.open, lamps.interlock, lamps.request, lamps.slip].forEach((m, i) => {
     const z = -0.84;
     m.position.set(-0.04 + i * 0.055, deskY(z) + 0.006, z);
     m.rotation.x = DESK_SLOPE;

@@ -12,6 +12,10 @@ export const PHYSICS = {
   ebTau: 0.15,          // build-up time constant of the emergency brake [s]
   doorTime: 1.6,        // doors fully open / fully closed [s]
   haltDecel: 5,         // a derailed or crashed tram grinds to a halt [m/s²]
+  // adhesion (GDD §5): on wet rails a service brake or power above the grip slides or slips the wheels,
+  // which then transmit only slideFactor of it; the emergency brake's magnetic track brakes don't need grip
+  wetGrip: 1.1,         // [m/s²] – B3, B4 and P4 from a standstill are too much
+  slideFactor: 0.55,
 };
 
 export const LIMITS = {
@@ -41,7 +45,7 @@ export const TIMETABLE = {
   timeScale: 4,
   leadIn: 16,           // the run starts this long before the first departure [game s]
   slack: 1,             // driving time allowance over the reference profile
-  refBrake: 1,          // reference profile braking [m/s²]
+  refBrake: 1,          // reference profile braking [m/s²] – less where B3 can't give it (downhill, wet rails)
   refMargin: 2,         // the reference profile stays this far under the limit [km/h]
   reaction: 2,          // reference dwell: the driver's reactions on top of doors and boarding [s]
   signalAllowance: 2,   // per tram signal on the way [real s]
@@ -127,6 +131,22 @@ export const STREET = {
   bellSpamComfort: 3,
   warnRange: 150,         // the HUD warns about hazards on the track this far ahead [m]
   signalAhead: 220,       // the HUD shows the next signal this far ahead [m]
+  wetBrake: 0.8,          // on wet rails hazards are fair for B2, the strongest brake that doesn't slide
+  wetWarn: 150,           // the HUD announces wet rails this far ahead [m]
+};
+
+// A lifting bridge (GDD §8): the bridge signal warns ("prepare"), the barriers come down, the leaves rise
+// while a boat passes and come down again. Times in real seconds.
+export const BRIDGE = {
+  warning: 6.5,           // cross now or stop
+  barriers: 2.5,
+  lift: 4.5,
+  open: 6,
+  reopen: 1.5,
+  // the warning starts where a calm stop (commitBrake, 1 s reaction) is still possible, plus up to this [m]
+  triggerExtra: 14,
+  bonus: 200,             // crossing on the warning
+  angle: 72,              // the leaves fully open [deg]
 };
 
 export const CITY = {
@@ -135,7 +155,8 @@ export const CITY = {
   drawBehind: 40,
   poleSpacing: 30,
   gauge: 1.435,
-  foundation: 30,         // buildings reach this far below the street, so hills never show a gap [m]
+  footing: 1,             // buildings reach this far below the ground (or the sea), so hills never show a gap [m]
+  tunnel: { half: 3.2, wall: 4.6, height: 6.4, lamps: 14, fade: 25 },   // [m]; fade: light changes over this
 };
 
 // Street looks per city (route `look`): the street profile, paving, buildings (GDD §13).
@@ -166,6 +187,24 @@ export const LOOKS = {
     roofs: 0.8,
     palette: ['#e2c58f', '#d98e5f', '#efe0bd', '#b9c7a5', '#d6a35b', '#c9b6d6', '#f0d39a', '#d2a19a', '#a9c1c9'],
     roofColors: ['#a5532f', '#8c4a2f', '#9a5a3a', '#4f545c'],
+  },
+  // the port on the hills: brick warehouses, grey-blue houses, slate roofs, the sea around
+  hafen: {
+    roadHalf: 6.5,
+    facade: 9,
+    road: '#505457',
+    trackbed: '#5e5b56',
+    sidewalk: '#8e9295',
+    curb: '#74787b',
+    wet: '#3d4246',       // wet road and trackbed (GDD §5 adhesion)
+    dashes: true,
+    floors: [3, 5],
+    roofs: 0.35,
+    palette: ['#9a4b3a', '#8c5a46', '#b0654a', '#7d8b95', '#a3adb3', '#c9c2b0', '#6f7f8c', '#b88a6a', '#d8d2c4'],
+    roofColors: ['#4f545c', '#5d6670', '#3f454c', '#7a3f30'],
+    sky: 0x6a8aa8,
+    fog: 0xb9c6cd,
+    sea: 0x4f7180,
   },
 };
 

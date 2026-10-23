@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { CITY, LOOKS, STOPS, STREET } from '../config.js';
 import { MeshBuilder, flatMaterial } from '../models/builder.js';
 import { mulberry32, pick } from '../core/utils.js';
-import { prism, ribbon, tbox, vcyl, wall } from './frame.js';
+import { block as footed, groundLevel, prism, ribbon, tbox, vcyl, wall } from './frame.js';
 
 // Placeholder city along the track (GDD §13): street, rails, sidewalks, catenary poles, facades, platforms,
-// cross streets and squares, in the route's look (modern / altstadt). Everything static is merged into
-// one mesh per chunk of track (one draw call each) and hidden beyond the fog. Buildings reach far below
-// the street (CITY.foundation), so a line climbing a hill never shows a gap under them.
+// cross streets, squares, quays and terraces, in the route's look (LOOKS). Everything static is merged
+// into one mesh per chunk of track (one draw call each) and hidden beyond the fog. Buildings reach down
+// to the ground (or the sea), so a line climbing a hill never shows a gap under them. The lifting bridge
+// and the tunnels are built in js/world/structures.js; the street leaves them out.
 
 const COL = {
   rail: '#b4b9bd',
@@ -25,6 +26,12 @@ const COL = {
   glass: '#8fa5b5',
   stopSign: '#f2c230',
   buffer: '#c8382c',
+  quay: '#8a8580',
+  quayEdge: '#b9b4aa',
+  bollard: '#2f3336',
+  craneRail: '#3c3f42',
+  retaining: '#8c8478',
+  balustrade: '#d6d0c2',
 };
 const SHOPS = ['#6d3b2f', '#2f4a5d', '#4a5d3a', '#7a6a3a', '#5a3f5d'];
 const DOWN = { x: 0, y: -1, z: 0 };
@@ -46,33 +53,51 @@ function outside(s0, s1, gaps) {
 
 const inGap = (s, gaps) => gaps.some(([g0, g1]) => s > g0 && s < g1);
 
-// A block that reaches below the street: top at `top`, foundation underneath.
-function block(b, track, s, off, top, sx, sz, color) {
-  const h = top + CITY.foundation;
-  tbox(b, track, s, off, top - h / 2, sx, h, sz, color);
+// [a, e] cut at the zone ends: [[from, to, inside a zone], …]
+function zones(a, e, list) {
+  const cuts = [a, e];
+  for (const z of list) for (const c of [z.from, z.to]) if (c > a && c < e) cuts.push(c);
+  cuts.sort((x, y) => x - y);
+  const out = [];
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const m = (cuts[i] + cuts[i + 1]) / 2;
+    out.push([cuts[i], cuts[i + 1], list.some((z) => m > z.from && m < z.to)]);
+  }
+  return out;
 }
 
-function street(b, track, look, s0, s1, gaps) {
+// A block that reaches down to the ground: top at `top` above the street.
+function block(b, track, look, s, off, top, sx, sz, color) {
+  footed(b, track, look.base, s, off, top, sx, sz, color);
+}
+
+// G: { deck: no street at all (bridge, tunnels), walk: no sidewalks, wet: wet rail zones }
+function street(b, track, look, s0, s1, G) {
   const R = look.roadHalf, F = look.facade, g = CITY.gauge / 2;
-  ribbon(b, track, s0, s1, -R, R, 0, look.road);
-  ribbon(b, track, s0, s1, -1.25, 1.25, 0.004, look.trackbed);
-  for (const r of [-g, g]) ribbon(b, track, s0, s1, r - 0.035, r + 0.035, 0.012, COL.rail);
-  if (look.dashes) {
-    // lane dashes – they also give a sense of speed
-    for (let s = Math.ceil(s0 / 9) * 9; s < s1; s += 9) {
-      const e = Math.min(s + 4.5, s1);
-      for (const o of [-4.1, 4.1]) ribbon(b, track, s, e, o - 0.07, o + 0.07, 0.006, COL.dash);
+  for (const [a, e] of outside(s0, s1, G.deck)) {
+    // wet rails show as a darker street
+    for (const [c, d, wet] of zones(a, e, G.wet)) {
+      ribbon(b, track, c, d, -R, R, 0, wet ? look.wet : look.road);
+      ribbon(b, track, c, d, -1.25, 1.25, 0.004, wet ? look.wet : look.trackbed);
     }
+    for (const r of [-g, g]) ribbon(b, track, a, e, r - 0.035, r + 0.035, 0.012, COL.rail);
+    if (look.dashes) {
+      // lane dashes – they also give a sense of speed
+      for (let s = Math.ceil(a / 9) * 9; s < e; s += 9) {
+        const t = Math.min(s + 4.5, e);
+        for (const o of [-4.1, 4.1]) ribbon(b, track, s, t, o - 0.07, o + 0.07, 0.006, COL.dash);
+      }
+    }
+    // contact wire above the track
+    ribbon(b, track, a, e, -0.03, 0.03, 5.6, COL.wire, DOWN);
   }
   // sidewalks, interrupted by cross streets
-  for (const [a, e] of outside(s0, s1, gaps)) {
+  for (const [a, e] of outside(s0, s1, G.walk)) {
     ribbon(b, track, a, e, R, F, 0.15, look.sidewalk);
     ribbon(b, track, a, e, -F, -R, 0.15, look.sidewalk);
     wall(b, track, a, e, R, 0, 0.15, look.curb, -1);
     wall(b, track, a, e, -R, 0, 0.15, look.curb, 1);
   }
-  // contact wire above the track
-  ribbon(b, track, s0, s1, -0.03, 0.03, 5.6, COL.wire, DOWN);
 }
 
 function poles(b, track, look, s0, s1, gaps) {
@@ -84,11 +109,11 @@ function poles(b, track, look, s0, s1, gaps) {
   }
 }
 
-// A cross street: a street beyond the main road, a zebra crossing before it and, with a tram signal,
-// the tram stop line.
-function intersection(b, track, look, I) {
+// A cross street: a street beyond the main road (on the sides that aren't a quay or a terrace), a zebra
+// crossing before it and, with a tram signal, the tram stop line.
+function intersection(b, track, look, I, open) {
   const R = look.roadHalf, W = 2 * STREET.crossHalf;
-  for (const side of [-1, 1]) block(b, track, I.s, side * (R + 22), 0.003, 44, W, look.road);
+  for (const side of [-1, 1]) if (open(side, I.s)) block(b, track, look, I.s, side * (R + 22), 0.003, 44, W, look.road);
   const zs = I.s - STREET.crossHalf - 1.8;
   for (let o = -R + 0.6; o < R - 0.3; o += 1.1) {
     if (Math.abs(o) < 1.6) continue;
@@ -97,12 +122,12 @@ function intersection(b, track, look, I) {
   if (I.signal) tbox(b, track, I.s - STREET.stopLineBack, 0, 0.008, 2.6, 0.01, 0.35, COL.white);
 }
 
-function trees(b, track, look, rnd, s0, s1, gaps) {
+function trees(b, track, look, rnd, s0, s1, gapsBySide) {
   for (const side of [-1, 1]) {
     if (rnd() < 0.5) continue;
     const o = side * (look.facade - 1.5);
     for (let s = Math.ceil(s0 / CITY.poleSpacing) * CITY.poleSpacing + 15; s < s1; s += CITY.poleSpacing) {
-      if (inGap(s, gaps)) continue;
+      if (inGap(s, gapsBySide[side])) continue;
       vcyl(b, track, s, o, 1.3, 0.12, 0.16, 2.6, 5, COL.trunk);
       const p = track.at(s, o, _t);
       const r = 1.6 + rnd() * 0.8;
@@ -115,7 +140,7 @@ function trees(b, track, look, rnd, s0, s1, gaps) {
 // One house on the street: facade, shop front, window bands, a cornice or a pitched roof.
 function house(b, track, look, rnd, mid, off, side, w, depth, floors) {
   const h = 4.2 + floors * 3.1 + 0.6;
-  block(b, track, mid, off, h, depth, w, pick(rnd, look.palette));
+  block(b, track, look, mid, off, h, depth, w, pick(rnd, look.palette));
   if (rnd() < look.roofs) {
     prism(b, track, mid, off, h, depth + 0.6, 3 + rnd() * 3, w, pick(rnd, look.roofColors));
   } else {
@@ -129,6 +154,11 @@ function house(b, track, look, rnd, mid, off, side, w, depth, floors) {
 function buildings(b, track, look, rnd, s0, s1, side, gaps) {
   const F = look.facade;
   const [f0, f1] = look.floors;
+  // on the inside of a tight curve a deep building would reach across its centre
+  const tight = (a, w, reach) => [a, a + w / 2, a + w].some((t) => {
+    const k = track.at(t, 0, _t).k;
+    return Math.sign(k) === side && reach * Math.abs(k) > 0.8;
+  });
   let s = s0 + rnd() * 3;
   while (s < s1) {
     const w = 8 + rnd() * 10, depth = 10 + rnd() * 8;
@@ -140,17 +170,23 @@ function buildings(b, track, look, rnd, s0, s1, side, gaps) {
     }
     if (rnd() < 0.1) {
       // side street: a gap with a strip of road leading away
-      block(b, track, s + 7, side * (F + 20), 0.005, 40, 12, look.road);
+      if (!tight(s, 14, F + 40)) block(b, track, look, s + 7, side * (F + 20), 0.005, 40, 12, look.road);
       s += 14;
       continue;
     }
     if (s + w > track.length) break;
+    if (tight(s, w, F + depth)) {
+      s += w;
+      continue;
+    }
     const floors = f0 + Math.floor(rnd() * (f1 - f0 + 1));
     house(b, track, look, rnd, s + w / 2, side * (F + depth / 2), side, w, depth, floors);
     // taller blocks further back fill the skyline
     if (rnd() < 0.35) {
       const bh = 6 + f1 * 3.5 + rnd() * 12;
-      block(b, track, s + w / 2, side * (F + depth + 8 + rnd() * 10), bh, 12, w, pick(rnd, look.palette));
+      const back = F + depth + 8 + rnd() * 10;
+      const color = pick(rnd, look.palette);
+      if (!tight(s, w, back + 6)) block(b, track, look, s + w / 2, side * back, bh, 12, w, color);
     }
     s += w;
   }
@@ -166,6 +202,40 @@ function square(b, track, look, rnd, sq, s0, s1) {
   for (let s = a, w; s < e - 4; s += w) {
     w = Math.min(10 + rnd() * 6, e - s);
     house(b, track, look, rnd, s + w / 2, side * (SQUARE + 7), side, w, 14, look.floors[1] + 1);
+  }
+}
+
+// [o0, o1] on the right, mirrored on the left.
+const span = (side, o0, o1) => (side > 0 ? [o0, o1] : [-o1, -o0]);
+
+// A quay on one side (GDD §8): paving out to the edge, crane rails, bollards, the quay wall down to the sea.
+function quay(b, track, look, q, s0, s1) {
+  const a = Math.max(s0, q.from), e = Math.min(s1, q.to);
+  if (a >= e) return;
+  const side = q.side === 'left' ? -1 : 1, F = look.facade, E = q.edge;
+  ribbon(b, track, a, e, ...span(side, F, E), 0.15, COL.quay, undefined, 4);
+  ribbon(b, track, a, e, ...span(side, E - 0.6, E), 0.2, COL.quayEdge, undefined, 4);
+  wall(b, track, a, e, side * E, look.base - track.at(a, 0, _t).y, 0.2, COL.retaining, side, 4);
+  for (const o of [F + 2, E - 2.5]) ribbon(b, track, a, e, ...span(side, o - 0.07, o + 0.07), 0.16, COL.craneRail, undefined, 4);
+  for (let s = Math.ceil(a / 12) * 12; s < e; s += 12) vcyl(b, track, s, side * (E - 0.6), 0.5, 0.18, 0.24, 0.6, 6, COL.bollard);
+}
+
+// A terrace on one side (GDD §8): no houses, a balustrade and a retaining wall down the slope – a view.
+function terrace(b, track, look, v, s0, s1) {
+  const a = Math.max(s0, v.from), e = Math.min(s1, v.to);
+  if (a >= e) return;
+  const side = v.side === 'left' ? -1 : 1, F = look.facade;
+  for (let s = a; s < e; s += 6) {
+    const t = Math.min(e, s + 6);
+    wall(b, track, s, t, side * F, look.base - track.at(s, 0, _t).y - 1, 0.15, COL.retaining, side);
+  }
+  for (let s = Math.ceil(a / 2.5) * 2.5; s < e; s += 2.5) tbox(b, track, s, side * (F - 0.15), 0.65, 0.14, 1, 0.14, COL.balustrade);
+  ribbon(b, track, a, e, ...span(side, F - 0.35, F), 1.15, COL.balustrade);
+  wall(b, track, a, e, side * (F - 0.35), 1.02, 1.15, COL.balustrade, -side);
+  // street lamps along the promenade
+  for (let s = Math.ceil(a / 25) * 25 + 12; s < e; s += 25) {
+    vcyl(b, track, s, side * (F - 0.6), 2, 0.06, 0.08, 4, 6, COL.pole);
+    tbox(b, track, s, side * (F - 0.6), 4.1, 0.35, 0.35, 0.35, COL.white);
   }
 }
 
@@ -204,31 +274,46 @@ function platform(b, track, st) {
 const LANDMARK_GAPS = { gate: 6 };
 
 export function createCity(track, stops, route) {
-  const look = LOOKS[route.look ?? 'modern'];
+  const look = { ...LOOKS[route.look ?? 'modern'], base: groundLevel(track, route) };
+  look.wet ??= look.road;
   const intersections = route.intersections ?? [];
   const squares = route.squares ?? [];
+  const quays = route.quays ?? [];
+  const views = route.views ?? [];
   const group = new THREE.Group();
   const chunks = [];
   const L = CITY.chunk;
   const sort = (list) => list.sort((a, b) => a[0] - b[0]);
+  const range = (q) => [q.from, q.to];
   const cross = sort(intersections.map((I) => [I.s - STREET.crossHalf, I.s + STREET.crossHalf]));
+  const br = route.bridge;
+  const deck = sort([...(br ? [[br.s, br.s + br.length]] : []), ...(route.tunnels ?? []).map(range)]);
   const marks = (route.landmarks ?? []).filter((m) => LANDMARK_GAPS[m.type])
     .map((m) => [m.s - LANDMARK_GAPS[m.type], m.s + LANDMARK_GAPS[m.type]]);
-  const both = sort([...cross, ...marks]);
-  const sideGaps = (side) => sort([...both, ...squares.filter((q) => q.side === side).map((q) => [q.from, q.to])]);
-  const gapsBySide = { [-1]: sideGaps('left'), 1: sideGaps('right') };
+  const both = sort([...cross, ...marks, ...deck.map(([a, e]) => [a - 3, e + 3])]);
+  const on = (side) => (q) => (q.side === 'left' ? -1 : 1) === side;
+  const bySide = (lists) => ({
+    [-1]: sort([...both, ...lists.flat().filter(on(-1)).map(range)]),
+    1: sort([...both, ...lists.flat().filter(on(1)).map(range)]),
+  });
+  const gapsBySide = bySide([squares, quays, views]);
+  const treeGaps = bySide([quays, views]);
+  const open = (side, s) => ![...quays, ...views].some((q) => on(side)(q) && s > q.from - 6 && s < q.to + 6);
+  const G = { deck, walk: sort([...cross, ...deck]), wet: route.wet ?? [] };
 
   for (let c = 0; c * L < track.length; c++) {
     const s0 = c * L, s1 = Math.min(track.length, s0 + L);
     const rnd = mulberry32(route.seed * 1000 + c);
     const b = new MeshBuilder();
-    street(b, track, look, s0, s1, cross);
+    street(b, track, look, s0, s1, G);
     poles(b, track, look, s0, s1, both);
-    trees(b, track, look, rnd, s0, s1, both);
+    trees(b, track, look, rnd, s0, s1, treeGaps);
     for (const side of [-1, 1]) buildings(b, track, look, rnd, s0, s1, side, gapsBySide[side]);
     for (const sq of squares) square(b, track, look, rnd, sq, s0, s1);
+    for (const q of quays) quay(b, track, look, q, s0, s1);
+    for (const v of views) terrace(b, track, look, v, s0, s1);
     for (const st of stops) if (st.s >= s0 && st.s < s1) platform(b, track, st);
-    for (const I of intersections) if (I.s >= s0 && I.s < s1) intersection(b, track, look, I);
+    for (const I of intersections) if (I.s >= s0 && I.s < s1) intersection(b, track, look, I, open);
     if (s1 >= track.length) {
       // buffer stop at the end of the line
       tbox(b, track, track.length - 1, 0, 0.6, 2.6, 1.2, 0.8, COL.buffer);

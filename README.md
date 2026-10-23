@@ -5,8 +5,10 @@ Low-poly 3D, a mobile-first browser game. Design: [docs/Tram-GDD.md](docs/Tram-G
 
 **Play: https://thesigns.github.io/Tram/**
 
-Status: **M1 vertical slice** – Altstadt Line 1 (8 stops through the old town: hills, a market square,
-the city gate, the cathedral square) and a training line; stars and saved progress; notched controller,
+Status: **M1 vertical slice, M2 in progress** – Altstadt Line 1 (8 stops through the old town: hills,
+a market square, the city gate, the cathedral square), Hafenberg Line 4 (6 stops from the harbour: the
+quay with cranes and ships, wet rails at the fish market, a lifting bridge, a steep climb, a tunnel under
+the hill and down to the lighthouse) and a training line; stars and saved progress; notched controller,
 tram physics, precision stopping with ratings and combos, interlocked doors, boarding, speed limits
 and curves (take one too fast and you derail), passenger comfort, a timetable, tram signals,
 street hazards (turning cars, pedestrians, a double-parked van, a cyclist), the bell, request stops,
@@ -51,8 +53,15 @@ vans park too close to the rails and cyclists ride between them – the HUD mark
 watching. Ring the bell to warn them (not too often). Hitting a person, or a car at speed, ends the run.
 At a request stop, stop only if the STOP lamp is lit or people are waiting; otherwise pass through.
 
+On wet rails the wheels slide under B3/B4 and slip under full power from a standstill (orange lamp):
+brake earlier with B1–B2 – the emergency brake still bites. Downhill the brakes give less, so start
+braking sooner. At the lifting bridge, a blinking dot on the bridge signal means it is about to lift:
+cross before the bar comes up (a bonus), or stop and watch the boat go through – the timetable waits
+with you.
+
 Each line gives up to three stars by score, and a perfect-run badge (no penalties, every stop GREAT or
-better, always on time). After a crash you may continue from the last stop you served, for 1000 points.
+better, always on time). Hafenberg opens with 4 stars (`?debug` opens every line). After a crash you may
+continue from the last stop you served, for 1000 points.
 
 ## Layout
 
@@ -65,7 +74,8 @@ js/main.js            game loop, loading lines, camera, menus
 js/config.js          tuning: physics, brakes, stop rating, city
 js/core/              tram physics, run (stops, score), street (signals, hazards), timetable, comfort,
                       progress, controls, utilities
-js/world/             track geometry, speed limits and signs, city, landmarks, sky
+js/world/             track geometry, speed limits and signs, city, landmarks, tunnels and the
+                      lifting bridge (structures), sky
 js/models/            procedural low-poly models (cab), mesh builder
 js/entities/          passengers, traffic
 js/audio/             sound synthesized with Web Audio

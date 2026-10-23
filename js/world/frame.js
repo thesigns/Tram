@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CITY } from '../config.js';
 
 // Building blocks in the track frame: s along the track, `off` to the right of it, `y` above the rail top.
 // Shared by the city and the landmarks; everything goes into a MeshBuilder.
@@ -60,4 +61,29 @@ export function prismAcross(b, track, s, off, y0, sx, sy, sz, color) {
   const p = track.at(s, off, _t);
   const g = new THREE.CylinderGeometry(1, 1, 1, 3, 1).rotateX(-Math.PI / 2).rotateY(Math.PI / 2);
   b.add(g, color, [p.x, p.y + y0 + sy / 3, p.z], [0, -p.h, 0], [sx, sy / 1.5, sz / Math.sqrt(3)]);
+}
+
+// The ground plane: the sea where the route has one, otherwise the lowest point of the line.
+export function groundLevel(track, route) {
+  return route.sea ?? Math.min(...track.y) - 0.05;
+}
+
+// A block whose top is `top` above the street and which reaches down to `base` (absolute y), so a line
+// climbing a hill never shows a gap under its buildings.
+export function block(b, track, base, s, off, top, sx, sz, color) {
+  const y = track.at(s, off, _t).y;
+  const h = top + y - base + CITY.footing;
+  tbox(b, track, s, off, top - h / 2, sx, h, sz, color);
+}
+
+// Slanted strip between two lines (offA, yA) and (offB, yB) along the track; the faces look across
+// (+1 right, −1 left) and up (+1) or down (−1).
+export function strip(b, track, s0, s1, offA, yA, offB, yB, color, across, up, step = 2) {
+  const n = Math.max(1, Math.ceil((s1 - s0) / step));
+  for (let i = 0; i < n; i++) {
+    const sa = s0 + ((s1 - s0) * i) / n, sb = s0 + ((s1 - s0) * (i + 1)) / n;
+    const h = track.at(sa, 0, _t).h;
+    b.quad(pt(track, sa, offA, yA), pt(track, sb, offA, yA), pt(track, sb, offB, yB), pt(track, sa, offB, yB), color,
+      { x: Math.cos(h) * across, y: up, z: Math.sin(h) * across });
+  }
 }

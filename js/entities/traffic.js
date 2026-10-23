@@ -11,7 +11,9 @@ const WATCH = {
   ped: ['wait', 'walk', 'back'],
   van: ['parked', 'driver'],
   bike: ['wait', 'ride'],
+  lift: ['wait', 'cross'],
 };
+const FIXED = { van: '#eeeae0', lift: '#e3a51e' };   // liveries that don't come from a palette
 
 // Models face −Z (forward), like the camera.
 function carParts() {
@@ -53,6 +55,20 @@ function bikeParts() {
   return { body: new THREE.BoxGeometry(0.44, 0.62, 0.3).translate(0, 1.32, 0.05).rotateX(-0.3), details: d.build() };
 }
 
+function liftParts() {
+  const d = new MeshBuilder();
+  for (const x of [-0.42, 0.42]) {
+    d.box(0.08, 2.5, 0.1, '#2b2b2b', [x, 1.25, -0.72]);
+    d.box(0.1, 0.06, 1.1, '#2b2b2b', [x * 0.7, 0.12, -1.3]);
+    for (const z of [-0.45, 0.75]) d.cylZ(0.25, 0.25, 0.2, 8, TYRE, [x * 1.3, 0.25, z], [0, Math.PI / 2, 0]);
+  }
+  d.box(1, 0.8, 1, '#8a6a48', [0, 0.6, -1.35]);           // a crate on the forks
+  for (const x of [-0.5, 0.5]) for (const z of [-0.3, 0.6]) d.box(0.05, 1.1, 0.05, '#2b2b2b', [x, 1.65, z]);
+  d.box(1.1, 0.06, 1, '#2b2b2b', [0, 2.2, 0.15]);         // overhead guard
+  d.box(0.24, 0.26, 0.24, SKIN, [0, 1.75, 0.25]);
+  return { body: new THREE.BoxGeometry(1.2, 1, 1.7).translate(0, 0.8, 0.45), details: d.build() };
+}
+
 // Blinkers: one mesh per side (front + rear lamp merged).
 function blinkerGeo(len, wid, y, side) {
   const b = new MeshBuilder();
@@ -86,12 +102,12 @@ export class TrafficView {
     this.street = street;
     this.group = new THREE.Group();
     scene.add(this.group);
-    const parts = { car: carParts(), van: vanParts(), ped: pedParts(), bike: bikeParts() };
+    const parts = { car: carParts(), van: vanParts(), ped: pedParts(), bike: bikeParts(), lift: liftParts() };
     this.views = street.agents.map((a) => {
       const p = parts[a.kind];
       const root = new THREE.Group();
       const palette = a.kind === 'ped' || a.kind === 'bike' ? COATS : CAR_COLORS;
-      const color = a.kind === 'van' ? '#eeeae0' : palette[a.color % palette.length];
+      const color = FIXED[a.kind] ?? palette[a.color % palette.length];
       const body = new THREE.Mesh(p.body, new THREE.MeshLambertMaterial({ color }));
       root.add(body, new THREE.Mesh(p.details, flatMaterial));
       let blink = null;
@@ -135,15 +151,17 @@ export class TrafficView {
   // Screen positions above hazards worth watching (GDD §7 telegraphing): people at the kerb, a car
   // waiting to turn, a van on the rails, a cyclist between them. On a phone they are only a few pixels
   // tall at the distance where a driver has to read them, so the HUD marks them.
-  markers(camera, w, h, tramS) {
+  // hidden(tramS, s): something (a tunnel) hides the street at s.
+  markers(camera, w, h, tramS, hidden) {
     const out = [];
     for (const hz of this.street.hazards) {
       const a = hz.agent;
       const d = a.s - tramS;
       if (!a.visible || d < 3 || d > 170 || !WATCH[a.kind]?.includes(a.state)) continue;
       if (a.kind === 'bike' && a.state === 'ride' && Math.abs(a.off) > 2) continue;   // moved aside
+      if (hidden?.(tramS, a.s)) continue;
       const p = this.track.at(a.s, a.off, _p);
-      _v.set(p.x, p.y + (a.kind === 'van' ? 2.9 : 2.3), p.z).project(camera);
+      _v.set(p.x, p.y + (a.kind === 'van' || a.kind === 'lift' ? 2.9 : 2.3), p.z).project(camera);
       if (_v.z > 1 || Math.abs(_v.x) > 1 || Math.abs(_v.y) > 1) continue;
       out.push({ x: ((_v.x + 1) / 2) * w, y: ((1 - _v.y) / 2) * h, dist: d });
     }
@@ -160,7 +178,7 @@ export class TrafficView {
       if (a.color !== v.colorIndex) {
         // agents are reused (cross traffic): repaint
         const palette = a.kind === 'ped' || a.kind === 'bike' ? COATS : CAR_COLORS;
-        if (a.kind !== 'van') v.body.material.color.set(palette[a.color % palette.length]);
+        if (!FIXED[a.kind]) v.body.material.color.set(palette[a.color % palette.length]);
         v.colorIndex = a.color;
       }
       const p = track.at(a.s, a.off, _p);
@@ -176,7 +194,7 @@ export class TrafficView {
       }
     }
     for (const { sg, lamps } of this.signals) {
-      const aspect = sg.aspect(this.street.time);
+      const aspect = sg.aspect(this.street.signalTime);
       // "prepare" blinks, like a warning
       for (const { sym, m } of lamps) m.material = this.lampMats[sym][sym === aspect && (sym !== 'prepare' || blinkOn) ? 1 : 0];
     }

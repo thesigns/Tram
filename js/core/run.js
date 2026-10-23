@@ -1,4 +1,4 @@
-import { COMFORT, LIMITS, LOOKS, STOPS, STREET, TIMETABLE } from '../config.js';
+import { BRIDGE, COMFORT, LIMITS, LOOKS, PHYSICS, STOPS, STREET, TIMETABLE } from '../config.js';
 import { Comfort } from './comfort.js';
 import { Street } from './street.js';
 import { buildTimetable } from './timetable.js';
@@ -8,7 +8,7 @@ import { mulberry32 } from './utils.js';
 // and the score (GDD §6, §7). stops[0] is where the run starts (doors closed, departure due); the last
 // stop is the terminus. After a failure the run can continue from the last served stop (a checkpoint).
 // Events go out through emit(type, data): rating, missed, skipped, request, penalty, board, ready,
-// departure, arrival, bump, fail, done, hint.
+// departure, arrival, bump, fail, done, hint, bridge.
 export class Run {
   constructor(route, tramCfg, track, limits, emit) {
     this.tramCfg = tramCfg;
@@ -33,6 +33,7 @@ export class Run {
       };
     });
     this.timetable = buildTimetable(track, limits, this.stops, tramCfg, route);
+    this.wet = route.wet ?? [];
     const roadHalf = LOOKS[route.look ?? 'modern'].roadHalf;
     this.street = new Street(route, track, this.timetable, tramCfg.length, roadHalf, (type, d) => this.streetEvent(type, d));
     this.comfort = new Comfort();
@@ -46,7 +47,9 @@ export class Run {
     this.continueCost = 0;      // kept outside the checkpoints, so every continue costs
     this.idx = 1;               // target stop
     this.phase = 'drive';       // drive | board | ready | done | failed
-    this.pts = { stops: 0, punctuality: 0, comfort: 0, overspeed: 0, penalties: 0 };
+    this.pts = { stops: 0, punctuality: 0, comfort: 0, overspeed: 0, penalties: 0, bonus: 0 };
+    this.shift = 0;             // the timetable moved by an excused bridge lift [game s]
+    this.bridgeDelta = 0;       // the delay when the bridge warning started
     this.combo = 0;
     this.bestCombo = 0;
     this.time = 0;              // real seconds since the start
@@ -88,7 +91,7 @@ export class Run {
     const c = this.comfort;
     return {
       idx: this.idx, served: this.departPending, time: this.time, combo: this.combo, bestCombo: this.bestCombo,
-      pts: { ...this.pts }, results: this.results.map((r) => ({ ...r })),
+      shift: this.shift, pts: { ...this.pts }, results: this.results.map((r) => ({ ...r })),
       comfort: { value: c.value, sum: c.sum, time: c.time },
     };
   }
@@ -99,7 +102,7 @@ export class Run {
   continueRun(tram) {
     const c = this.checkpoint;
     Object.assign(this, {
-      idx: c.idx, departPending: c.served, time: c.time, combo: c.combo, bestCombo: c.bestCombo,
+      idx: c.idx, departPending: c.served, time: c.time, combo: c.combo, bestCombo: c.bestCombo, shift: c.shift,
       phase: 'drive', fail: null, overAcc: 0, stopRequested: false, curve: null, lateral: 0, delta: 0,
     });
     this.pts = { ...c.pts };
@@ -110,9 +113,10 @@ export class Run {
     tram.reset(s);
     this.prevS = s;
     this.limit = this.limits.at(s);
-    this.countdown = this.timetable.dep[c.served] - this.clock;
+    this.countdown = this.depAt(c.served) - this.clock;
     this.street.reset(this.seed);
     this.street.time = this.time;
+    this.street.lag = this.shift / TIMETABLE.timeScale;
     this.continues++;
     this.continueCost += STOPS.continuePenalty;
     this.emit('penalty', { reason: 'continue', points: STOPS.continuePenalty });
@@ -128,7 +132,7 @@ export class Run {
 
   get score() {
     const p = this.pts;
-    return p.stops + p.punctuality + p.comfort + p.overspeed + p.penalties - this.continueCost;
+    return p.stops + p.punctuality + p.comfort + p.overspeed + p.penalties + p.bonus - this.continueCost;
   }
 
   get target() { return this.stops[this.idx] ?? null; }
@@ -136,6 +140,25 @@ export class Run {
   get over() { return this.phase === 'done' || this.phase === 'failed'; }
   // Game clock [s since midnight].
   get clock() { return this.timetable.start - TIMETABLE.leadIn + this.time * TIMETABLE.timeScale; }
+  // The clock the timetable is read against: an excused bridge lift moves the whole timetable.
+  get sched() { return this.clock - this.shift; }
+  // Departure and arrival times as they stand now [game s].
+  depAt(i) { return this.timetable.dep[i] + this.shift; }
+  arrAt(i) { return this.timetable.arr[i] + this.shift; }
+
+  // Adhesion under the tram (GDD §5) for tram.step: lower on wet rails.
+  grip(s) { return this.wet.some((z) => z.from < s && z.to > s - this.tramCfg.length) ? PHYSICS.wetGrip : Infinity; }
+
+  // Wet rails under the tram (dist 0) or ahead: { dist } or null.
+  wetAhead(s) {
+    let best = null;
+    for (const z of this.wet) {
+      if (z.to <= s - this.tramCfg.length || z.from > s + STREET.wetWarn) continue;
+      const dist = Math.max(0, z.from - s);
+      if (!best || dist < best.dist) best = { dist };
+    }
+    return best;
+  }
 
   // Does anybody need this stop? (Only request stops can be passed.)
   needed(st) { return !st.request || st.waiting > 0 || st.alight; }
@@ -208,7 +231,7 @@ export class Run {
     this.pts.stops += points;
     this.record({ name: st.name, rating, error, points });
     this.emit('rating', { stop: this.idx, rating, error, points, mult });
-    if (this.terminus) this.punctuality(this.idx, this.clock - this.timetable.arr[this.idx], true);
+    if (this.terminus) this.punctuality(this.idx, this.sched - this.timetable.arr[this.idx], true);
   }
 
   record(r) {
@@ -264,10 +287,23 @@ export class Run {
     const tram = this.tram;
     if (this.over) return;
     if (type === 'red') this.penalty('red', STREET.penaltyRed);
+    if (type === 'fall') this.failRun(tram, 'bridge');
+    if (type === 'bridge') {
+      if (d.phase === 'warning') this.bridgeDelta = this.sched - this.timetable.at(tram.s);
+      if (d.phase === 'made') this.pts.bonus += BRIDGE.bonus;
+      if (d.phase === 'cleared') {
+        // the delay the lift caused doesn't count: the timetable (and the green wave) moves with it
+        const excuse = Math.max(0, Math.round(this.sched - this.timetable.at(d.line) - this.bridgeDelta));
+        this.shift += excuse;
+        this.street.lag = this.shift / TIMETABLE.timeScale;
+        d = { ...d, excuse };
+      }
+      this.emit('bridge', { ...d, points: BRIDGE.bonus });
+    }
     if (type === 'collision') {
       const kind = d.agent.kind;
       if (kind === 'ped' || kind === 'bike') this.failRun(tram, kind === 'ped' ? 'pedestrian' : 'cyclist');
-      else if (tram.v * 3.6 > STREET.fatalSpeed) this.failRun(tram, 'collision');
+      else if (tram.v * 3.6 > STREET.fatalSpeed) this.failRun(tram, 'collision', { what: kind });
       else {
         // a bump: the tram stops dead, the passengers are not amused
         this.penalty('collision', STREET.penaltyCollision);
@@ -312,13 +348,13 @@ export class Run {
     if (this.departPending !== null && tram.v > 0) {
       const i = this.departPending;
       this.departPending = null;
-      this.punctuality(i, this.clock - this.timetable.dep[i], false);
+      this.punctuality(i, this.sched - this.timetable.dep[i], false);
     }
     // countdown while standing at a stop, otherwise the live delta along the reference profile
     const at = this.phase === 'board' || this.phase === 'ready' ? this.idx : this.departPending;
     const dep = at !== null ? this.timetable.dep[at] : null;
-    this.countdown = dep != null ? dep - this.clock : null;
-    this.delta = this.countdown !== null ? Math.max(0, -this.countdown) : this.clock - this.timetable.at(tram.s);
+    this.countdown = dep != null ? dep - this.sched : null;
+    this.delta = this.countdown !== null ? Math.max(0, -this.countdown) : this.sched - this.timetable.at(tram.s);
 
     const st = this.target;
     if (this.phase === 'drive') {

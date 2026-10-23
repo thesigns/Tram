@@ -1,4 +1,4 @@
-import { PHYSICS, STOPS, TIMETABLE } from '../config.js';
+import { BRAKE, PHYSICS, STOPS, STREET, TIMETABLE } from '../config.js';
 import { resistance, tractionAccel } from './tram.js';
 
 const _p = {};
@@ -9,7 +9,7 @@ export const parseClock = (text) => {
 };
 
 // Timetable from a reference driving profile (GDD §6.2): full power up to just under the limit,
-// braking at TIMETABLE.refBrake for lower limits and stops, the expected dwell at every stop,
+// braking at TIMETABLE.refBrake for lower limits and stops (or what B3 gives downhill, B2 on wet rails), the expected dwell at every stop,
 // times the slack (route `slack` or TIMETABLE.slack). Departures are rounded up. A stop in the route
 // data can fix its time with `dep` ("06:15:30").
 // All times are game seconds since midnight. Kept free of Three.js.
@@ -17,7 +17,13 @@ export function buildTimetable(track, limits, stops, tramCfg, route) {
   const T = TIMETABLE;
   const n = Math.ceil(track.length) + 1;
   const cap = new Float32Array(n);
-  for (let m = 0; m < n; m++) cap[m] = Math.max(1, limits.at(m) - T.refMargin) / 3.6;
+  const brake = new Float32Array(n);
+  for (let m = 0; m < n; m++) {
+    cap[m] = Math.max(1, limits.at(m) - T.refMargin) / 3.6;
+    const wet = (route.wet ?? []).some((z) => m >= z.from && m < z.to);
+    const b = (wet ? STREET.wetBrake : BRAKE.service[2]) + PHYSICS.g * track.at(m, 0, _p).grade;
+    brake[m] = Math.min(T.refBrake, Math.max(0.3, b));
+  }
 
   // tref[m]: reference driving time [real s] from the start, along the whole route
   const tref = new Float32Array(n);
@@ -31,7 +37,7 @@ export function buildTimetable(track, limits, stops, tramCfg, route) {
       v[m - a + 1] = Math.min(cap[m + 1], Math.sqrt(Math.max(0, vi * vi + 2 * acc)));
     }
     v[b - a] = 0;
-    for (let m = b - 1; m > a; m--) v[m - a] = Math.min(v[m - a], Math.sqrt(v[m - a + 1] ** 2 + 2 * T.refBrake));
+    for (let m = b - 1; m > a; m--) v[m - a] = Math.min(v[m - a], Math.sqrt(v[m - a + 1] ** 2 + 2 * brake[m]));
     let t = 0;
     for (let m = a; m < b; m++) {
       t += 1 / Math.max(0.3, (v[m - a] + v[m - a + 1]) / 2);

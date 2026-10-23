@@ -35,6 +35,8 @@ export class Tram {
     this.doorsTarget = 0;
     this.da = 0;          // change of acceleration in the last step (comfort)
     this.halted = false;  // the run has ended (derailment, collision): grind to a halt
+    this.slide = false;   // the brake asks for more than the rail can give (GDD §5 adhesion)
+    this.slip = false;    // … or the power does
   }
 
   get stopped() { return this.v === 0; }
@@ -48,7 +50,8 @@ export class Tram {
     return true;
   }
 
-  step(dt, grade = 0) {
+  // grip: the adhesion available [m/s²] (Infinity on dry rails)
+  step(dt, grade = 0, grip = Infinity) {
     const cfg = this.cfg, P = PHYSICS;
     const n = this.notch;
 
@@ -62,15 +65,23 @@ export class Tram {
     this.brake += (brakeTarget - this.brake) * k;
 
     const v = this.v;
-    const aTraction = this.traction * tractionAccel(cfg, v);
+    // asking for more than the grip slides or slips the wheels; the emergency brake works anyway
+    const full = tractionAccel(cfg, v);
+    this.slide = n !== EB && !this.halted && brakeTarget > grip && v > 0;
+    this.slip = tracTarget * full > grip;
+    const brake = this.slide ? Math.min(this.brake, grip * P.slideFactor) : this.brake;
+    const aTraction = this.slip ? Math.min(this.traction * full, grip * P.slideFactor) : this.traction * full;
 
     let a;
     if (v > 0) {
-      a = aTraction - resistance(v, grade) - this.brake;
+      a = aTraction - resistance(v, grade) - brake;
+    } else if (brake > 0.05 || !this.doorsClosed) {
+      // standing: any brake notch (or open doors) holds the tram – a hill can't push it away
+      a = Math.max(0, aTraction - Math.max(0, P.g * grade) - brake - P.rolling);
     } else {
-      // standing: brakes and rolling resistance hold the tram until the drive overcomes them (forward only)
+      // brakes released: the drive (or the hill, forward only) moves it once it beats rolling resistance
       const drive = aTraction - P.g * grade;
-      a = drive > this.brake + P.rolling ? drive - this.brake - P.rolling : 0;
+      a = drive > P.rolling ? drive - P.rolling : 0;
     }
 
     let v2 = v + a * dt;

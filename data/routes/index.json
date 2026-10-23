@@ -1,6 +1,7 @@
 {
   "lines": [
     { "id": "altstadt-1", "file": "altstadt-1.json", "city": "Altstadt", "name": "Line 1", "from": "Hauptbahnhof", "to": "Domplatz", "stops": 8, "unlock": 0 },
+    { "id": "hafenberg-1", "file": "hafenberg-1.json", "city": "Hafenberg", "name": "Line 4", "from": "Hafenbahnhof", "to": "Am Leuchtturm", "stops": 6, "unlock": 4 },
     { "id": "test", "file": "test-line.json", "city": "Training", "name": "Test Line", "from": "Tram Depot", "to": "Cathedral Square", "stops": 4, "unlock": 0 }
   ]
 }
